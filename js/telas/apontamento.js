@@ -130,7 +130,7 @@ function mostrarAvisos() {
   else {
     if (p.tempo_padrao_seg == null) av.push('<div class="aviso-box"><b>Este processo não tem tempo padrão</b>, o apontamento ficará com 0 minutos.</div>');
     const feito = Number(p.apontado) || 0;
-    if (feito && feito + qtd > it.qtd) av.push(`<div class="aviso-box">Este pacote já tem <b>${num(feito)}</b> peça(s) apontada(s) em ${h(p.processo)}. Com mais ${num(qtd)}, passa da quantidade do pacote (${num(it.qtd)}).</div>`);
+    if (feito) av.push(`<div class="aviso-box">Esta etiqueta já tem <b>${num(feito)}</b> peça(s) apontada(s) em ${h(p.processo)}. Ao gravar, será pedida confirmação.</div>`);
     else if (qtd > it.qtd) av.push(`<div class="aviso-box">A quantidade (${num(qtd)}) é maior que a do pacote (${num(it.qtd)}).</div>`);
   }
   box.innerHTML = av.join('');
@@ -146,15 +146,25 @@ async function gravar() {
   if (p.tempo_padrao_seg == null && !await confirmar('Processo sem tempo padrão',
     `<b>${h(p.processo)}</b> não tem tempo padrão para ${h(it.produto)} + ${h(it.tecido || '')}. O apontamento ficará com <b>0 minutos</b>. Gravar assim mesmo?`, 'Gravar com 0 minutos', 'perigo')) return;
   const feito = Number(p.apontado) || 0;
-  if (feito + qtd > it.qtd && !await confirmar('Quantidade acima do pacote',
-    `O pacote tem ${num(it.qtd)} peça(s) e já há ${num(feito)} apontada(s) em ${h(p.processo)}. Gravar mais ${num(qtd)}?`, 'Gravar', 'perigo')) return;
+  // pacote ainda sem apontamento neste processo, mas qtd maior que a do pacote (repetição é conferida no servidor)
+  if (!feito && qtd > it.qtd && !await confirmar('Quantidade acima do pacote',
+    `O pacote tem ${num(it.qtd)} peça(s). Gravar ${num(qtd)}?`, 'Gravar', 'perigo')) return;
   st.ocupado = true;
   const btn = raiz.querySelector('#gravar'); if (btn) btn.disabled = true;
-  const { data: r, error } = await db.rpc('registrar_apontamento', {
+  const params = {
     p_codigo: it.codigo, p_processo: p.processo_id, p_funcionario: Number(st.func), p_qtd: qtd,
-    p_data_producao: st.data, p_obs: raiz.querySelector('#obs')?.value || null });
+    p_data_producao: st.data, p_obs: raiz.querySelector('#obs')?.value || null, p_confirmar_repetido: false };
+  let { data: r, error } = await db.rpc('registrar_apontamento', params);
+  // mesma etiqueta já apontada neste processo (inclui histórico do AppSheet): só grava se confirmar
+  if (!error && r?.repetido) {
+    bipSom(false);
+    const ok = await confirmar('Etiqueta já apontada neste processo',
+      h(r.aviso).replace(/\n/g, '<br>'), 'Confirmar novo lançamento', 'perigo');
+    if (!ok) { st.ocupado = false; if (btn) btn.disabled = false; return; }
+    ({ data: r, error } = await db.rpc('registrar_apontamento', { ...params, p_confirmar_repetido: true }));
+  }
   st.ocupado = false;
-  if (error) { if (btn) btn.disabled = false; bipSom(false); return toast(msgErro(error), 'erro'); }
+  if (error || !r?.gravado) { if (btn) btn.disabled = false; bipSom(false); return toast(error ? msgErro(error) : 'Apontamento não gravado.', 'erro'); }
   bipSom(true);
   st.ultimoProc = p.processo_id;
   toast(`Gravado: ${p.processo} · ${num(qtd)} peça(s) · ${num(r.minutos)} min`, 'ok');

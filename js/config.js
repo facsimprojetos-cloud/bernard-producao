@@ -6,3 +6,7 @@ export const SCHEMA = 'bernard';
 export const EMPRESA = 'BERNARD';
 // Logins sem e-mail real (celulares da produção) viram <usuario>@bernard.app
 export const DOMINIO_INTERNO = 'bernard.app';
+
+// Login com Google: deixe false enquanto o provedor Google estiver desativado no Supabase
+// (Authentication > Providers). Ao ativar lá, mude para true e publique.
+export const LOGIN_GOOGLE = false;

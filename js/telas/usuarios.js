@@ -17,7 +17,7 @@ const loginDe = (email) => interno(email) ? email.split('@')[0] : email;
 export async function render(el) {
   const usuarios = await ler(db.from('usuarios').select('*').order('ativo', { ascending: false }).order('nome'));
   el.innerHTML = `
-    <div class="cab"><div><h1>Usuários</h1><p>Donos e equipe entram com o Google (o e-mail precisa estar aqui). Celulares da produção entram com <b>usuário e senha</b> criados nesta tela.</p></div>
+    <div class="cab"><div><h1>Usuários</h1><p>Donos e equipe entram com e-mail e senha (o e-mail precisa estar aqui). Celulares da produção entram com <b>usuário e senha</b> criados nesta tela.</p></div>
       <button class="btn pri" id="novo">+ Novo usuário</button></div>
     <div class="tabela-wrap"><table><thead><tr><th>Nome</th><th>Login</th><th>Perfis</th><th>Status</th><th></th></tr></thead>
       <tbody>${usuarios.map(u => `<tr><td class="forte">${h(u.nome || '')}</td>
@@ -78,8 +78,8 @@ function form(u, depois) {
         const { data, error } = await db.rpc('criar_usuario', { p_login: login, p_nome: f.nome.value.trim(), p_perfis: sel, p_senha: mail ? null : f.senha.value });
         if (error) { toast(msgErro(error), 'erro'); return false; }
         toast(data.interno ? `Usuário "${login.toLowerCase()}" criado. Entra com essa senha.`
-          : data.conta_existente ? 'Liberado. Este e-mail já tinha conta: entra com o Google ou com a senha que já usa.'
-          : 'Liberado. A pessoa entra com o Google (ou senha inicial 123456).', 'ok');
+          : data.conta_existente ? 'Liberado. Este e-mail já tinha conta: entra com a senha que já usa.'
+          : 'Liberado. A pessoa entra com o e-mail e a senha inicial 123456.', 'ok');
         depois();
       }
     }]

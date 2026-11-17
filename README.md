@@ -28,7 +28,7 @@ Substitui o AppSheet "Coleta de Dados Bernard" (planilha "Processos e Tempos Ber
 | cadastros | cores, elásticos, funcionárias, produtos, roteiro… |
 
 ## Login
-- **Google** ou e-mail e senha: donos e equipe. O e-mail precisa estar em `bernard.usuarios` (o vínculo com a conta é feito no primeiro login).
+- **E-mail e senha** (e Google, quando o provedor for ativado no Supabase e `LOGIN_GOOGLE = true` em `js/config.js`): donos e equipe. O e-mail precisa estar em `bernard.usuarios` (o vínculo com a conta é feito no primeiro login).
 - **Usuário e senha**: celulares da produção. O admin cria em **Usuários**; o login `maria` vira `maria@bernard.app` no Auth (`bernard.criar_usuario` / `bernard.redefinir_senha`, só admin).
 
 ## Estrutura
@@ -50,7 +50,7 @@ As regras de negócio ficam no banco (funções `bernard.*`, `security definer` 
 Branch `main` publicada pelo GitHub Pages a partir da raiz. Domínio: registro **CNAME** `bernard` → `facsimprojetos-cloud.github.io` no DNS de `gutgestao.com.br` (arquivo `CNAME` na raiz).
 
 ## Telas
-- [x] Login (Google + usuário/senha)
+- [x] Login (e-mail ou usuário + senha; Google pronto, desligado)
 - [x] Apontamento (bip)
 - [x] Corte + etiquetas
 - [x] Usuários
