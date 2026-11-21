@@ -30,7 +30,7 @@ export async function render(el) {
   if (!st.ini) [st.ini, st.fim] = intervalo(st.periodo);
   const opt = (v, n) => `<option value="${v}" ${st.periodo === v ? 'selected' : ''}>${n}</option>`;
   el.innerHTML = `
-    <div class="cab"><div><h1>Painel</h1><p>Produção, corte e conferência dos lançamentos. Peças produzidas = peças apontadas na Embalagem.</p></div></div>
+    <div class="cab"><div><h1>Painel</h1><p>Produção, corte e conferência dos apontamentos. Peças produzidas = peças apontadas na Embalagem.</p></div></div>
     <div class="filtros">
       <div class="campo"><label>Período</label><select id="per">${opt('hoje', 'Hoje')}${opt('ontem', 'Ontem')}${opt('semana', 'Esta semana')}${opt('semana_ant', 'Semana passada')}${opt('mes', 'Este mês')}${opt('mes_ant', 'Mês passado')}${opt('30', 'Últimos 30 dias')}${opt('outro', 'Escolher datas')}</select></div>
       <div class="campo"><label>De</label><input type="date" id="ini" value="${h(st.ini)}"></div>
@@ -57,7 +57,7 @@ function desenhar(box, d) {
   box.innerHTML = `
     <h2 class="sec">Produção · ${h(data(d.periodo.ini))} a ${h(data(d.periodo.fim))}</h2>
     <div class="kpis">
-      ${card('Peças produzidas (embaladas)', num(p.embalados), `${num(p.dias_com_producao)} dia(s) com produção`)}
+      ${card('Peças produzidas (embaladas)', num(p.embalados), `embaladas no período, de cortes de qualquer data`)}
       ${card('Minutos produzidos', num(p.minutos), `${num(p.minutos / 60, 0)} h · ${num(p.operadoras)} operador(es)`)}
       ${card('Eficiência', p.eficiencia == null ? '—' : `${num(p.eficiencia, 1)}%`, p.eficiencia == null || semJornada ? '<a href="#/cadastros">cadastre a jornada</a> de todos' : 'minutos produzidos ÷ jornada')}
     </div>
@@ -66,7 +66,7 @@ function desenhar(box, d) {
       ${card('Peças cortadas', num(c.cortado), `${num(c.cortes)} corte(s)`)}
       ${card('Finalizado', num(c.finalizado), pct(c.finalizado, c.cortado), STATUS.finalizado.cor)}
       ${card('Em produção', num(c.em_producao), pct(c.em_producao, c.cortado), STATUS.em_producao.cor)}
-      ${card('Parado', num(c.parado), `${pct(c.parado, c.cortado)} · sem lançamento há ${d.periodo.dias_parado}+ dias`, STATUS.parado.cor)}
+      ${card('Parado', num(c.parado), `${pct(c.parado, c.cortado)} · sem apontamento há ${d.periodo.dias_parado}+ dias`, STATUS.parado.cor)}
     </div>
     ${barraStatus(c)}
     <div class="painel-2">
@@ -75,8 +75,8 @@ function desenhar(box, d) {
     </div>
     <div class="painel-2">
       <div class="card"><h3>Ranking por operador</h3>${ranking(d.ranking)}</div>
-      <div class="card"><h3>Conferência corte × lançamentos</h3>
-        <p class="muted peq">Para os cortes do período: peças lançadas em cada processo comparadas ao total cortado (${num(c.cortado)}). Processo muito abaixo dos outros indica bip esquecido.</p>
+      <div class="card"><h3>Conferência corte × apontamentos</h3>
+        <p class="muted peq">Só os cortes do período (${num(c.cortado)} peças cortadas): quantas dessas peças já foram apontadas em cada processo, em qualquer data. Processo muito abaixo dos outros indica bip esquecido.</p>
         ${conciliacao(d.conciliacao)}</div>
     </div>
     <div class="card"><h3>Produção por processo</h3>${porProcesso(d.por_processo)}</div>
@@ -128,7 +128,7 @@ function ranking(lista) {
 
 function conciliacao(lista) {
   return `<div class="tabela-wrap"><table>
-    <thead><tr><th>Processo</th><th class="dir">Lançado</th><th>% do cortado</th></tr></thead>
+    <thead><tr><th>Processo</th><th class="dir">Apontado</th><th>% do cortado</th></tr></thead>
     <tbody>${lista.map(x => `<tr><td class="forte">${h(x.processo)}</td><td class="dir">${num(x.apontado)}</td>
       <td><div class="mini-barra"><span style="width:${Math.min(100, x.pct || 0)}%"></span><b>${x.pct == null ? '—' : num(x.pct, 1) + '%'}</b></div></td></tr>`).join('')}</tbody></table></div>`;
 }
@@ -147,7 +147,7 @@ function desenharCortes(box, cortes) {
   box.innerHTML = `<h3>Cortes do período</h3>
     <div class="abas">${btn('parado', 'Parados')}${btn('em_producao', 'Em produção')}${btn('finalizado', 'Finalizados')}${btn('todos', 'Todos')}</div>
     ${lista.length ? `<div class="tabela-wrap"><table>
-      <thead><tr><th>Corte</th><th>Data</th><th>Modelo · tecido</th><th class="dir">Cortado</th><th class="dir">Embalado</th><th>Andamento</th><th>Último lançamento</th><th>Status</th></tr></thead>
+      <thead><tr><th>Corte</th><th>Data</th><th>Modelo · tecido</th><th class="dir">Cortado</th><th class="dir">Embalado</th><th>Andamento</th><th>Último apontamento</th><th>Status</th></tr></thead>
       <tbody>${lista.map(c => `<tr><td class="forte">${h(c.nome)}</td><td>${h(data(c.data))}</td><td>${h(c.produto)} · ${h(c.tecido || '')}</td>
         <td class="dir">${num(c.cortado)}</td><td class="dir">${num(c.embalado)}</td>
         <td><div class="mini-barra"><span style="width:${c.cortado ? 100 * c.embalado / c.cortado : 0}%"></span><b>${c.cortado ? num(100 * c.embalado / c.cortado, 0) : 0}%</b></div></td>
