@@ -66,7 +66,9 @@ export function modal({ titulo, corpo, botoes = [], largo = false, aoAbrir }) {
     <div class="modal-cab"><h2>${h(titulo)}</h2><button type="button" data-fechar aria-label="Fechar">×</button></div>
     <div class="modal-corpo">${corpo}</div>
     <div class="modal-rod"></div></div>`;
-  const fechar = () => fundo.remove();
+  const esc = (e) => { if (e.key === 'Escape' && raiz.lastElementChild === fundo) fechar(); };
+  const fechar = () => { fundo.remove(); document.removeEventListener('keydown', esc); };
+  document.addEventListener('keydown', esc);
   fundo.querySelector('[data-fechar]').onclick = fechar;
   fundo.addEventListener('mousedown', (e) => { if (e.target === fundo) fechar(); });
   const rod = fundo.querySelector('.modal-rod');

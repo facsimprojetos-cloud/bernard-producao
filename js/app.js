@@ -1,7 +1,7 @@
 import { EMPRESA, DOMINIO_INTERNO, LOGIN_GOOGLE } from './config.js';
 import { db, ctx, tem } from './estado.js';
 // Versão publicada: muda a cada atualização para o navegador não usar telas antigas do cache
-const VERSAO = '202611211330'; // atualizar a cada publicação
+const VERSAO = '202611211345'; // atualizar a cada publicação
 import { h, toast, modal } from './util.js';
 
 // Chegou pelo link de "Esqueci minha senha" do e-mail?
@@ -72,6 +72,7 @@ let navSeq = 0;
 async function navegar() {
   const visiveis = rotasVisiveis();
   const el = document.getElementById('conteudo');
+  document.querySelectorAll('#modal-raiz .modal-fundo').forEach(m => m.remove()); // trocar de tela fecha janelas abertas
   if (!visiveis.length) { el.innerHTML = '<div class="card">Seu perfil ainda não tem telas liberadas nesta versão.</div>'; return; }
   const hash = location.hash || visiveis[0].hash;
   const rota = ROTAS.find(r => r.hash && hash.startsWith(r.hash)) || visiveis[0];
