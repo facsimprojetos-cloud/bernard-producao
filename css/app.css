@@ -258,3 +258,24 @@ span.vazio{padding:0;color:var(--alerta,#b45309);font-style:italic}
 .roteiro-grupo.editando .tabela-wrap{outline:2px solid var(--acento,#b8913a);border-radius:10px}
 #hist{margin-top:10px}
 #hist summary{cursor:pointer}
+
+/* Painel */
+h2.sec{font-size:1rem;margin:18px 0 8px;color:var(--pri-2)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:10px}
+.kpi{background:var(--card);border:1px solid var(--linha);border-radius:var(--raio);padding:12px 14px;box-shadow:var(--sombra)}
+.kpi small{display:block;color:var(--sub);font-weight:700;font-size:.75rem;text-transform:uppercase;letter-spacing:.02em}
+.kpi b{display:block;font-size:1.7rem;font-weight:800;line-height:1.2;margin:2px 0}
+.kpi span{font-size:.8rem;color:var(--sub)}
+.barra-status{display:flex;gap:2px;height:14px;border-radius:7px;overflow:hidden;margin:4px 0 6px;background:var(--linha)}
+.legenda{display:flex;gap:14px;flex-wrap:wrap;font-size:.82rem;color:var(--pri-2);margin-bottom:14px}
+.legenda i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.painel-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:14px}
+.painel-2 .card{margin-bottom:0}
+.painel-2 + .painel-2, .painel-2 + .card{margin-top:14px}
+.card h3{margin:0 0 4px;font-size:1rem}
+.grafico{width:100%;height:auto;display:block;margin-top:6px}
+.g-txt{font-size:11px;fill:var(--sub)}
+.g-alvo:hover{fill:rgba(0,0,0,.04)}
+.mini-barra{position:relative;min-width:120px;height:20px;background:#f3f2ee;border-radius:5px;overflow:hidden}
+.mini-barra span{position:absolute;inset:0 auto 0 0;background:var(--acento-2);border-right:2px solid var(--acento)}
+.mini-barra b{position:relative;font-size:.8rem;padding-left:6px;line-height:20px}

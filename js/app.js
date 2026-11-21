@@ -1,7 +1,7 @@
 import { EMPRESA, DOMINIO_INTERNO, LOGIN_GOOGLE } from './config.js';
 import { db, ctx, tem } from './estado.js';
 // Versão publicada: muda a cada atualização para o navegador não usar telas antigas do cache
-const VERSAO = '202611211745'; // atualizar a cada publicação
+const VERSAO = '202611211900'; // atualizar a cada publicação
 import { h, toast, modal } from './util.js';
 
 // Chegou pelo link de "Esqueci minha senha" do e-mail?
@@ -16,6 +16,8 @@ const ROTAS = [
   { hash: '#/fechamento', nome: 'Fechamento por dia', ico: '📊', modulo: 'fechamento', perfil: 'fechamento' },
   { hash: '#/roteiro', nome: 'Tempo padrão por modelo', ico: '⏱️', modulo: 'roteiro' },
   { grupo: 'Gestão' },
+  { hash: '#/painel', nome: 'Painel', ico: '📈', modulo: 'painel', perfil: 'admin' },
+  { hash: '#/cadastros', nome: 'Cadastros', ico: '🗂️', modulo: 'cadastros', perfil: 'admin' },
   { hash: '#/usuarios', nome: 'Usuários', ico: '👥', modulo: 'usuarios', perfil: 'admin' },
 ];
 const rotasVisiveis = () => ROTAS.filter(r => r.hash && (!r.perfil || tem(r.perfil)));
