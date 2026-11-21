@@ -11,7 +11,7 @@ const somaDias = (iso, n) => {
   return d.toISOString().slice(0, 10);
 };
 
-export async function render(el) {
+export async function render(el, { embutido = false } = {}) {
   const cad = await cadastros(db);
   const nomes = [...new Set(cad.funcionarios.filter(f => f.ativo !== false).map(f => f.nome))].sort((a, b) => a.localeCompare(b));
   if (!diaAtual) {
@@ -19,8 +19,8 @@ export async function render(el) {
     diaAtual = ult[0]?.data || hojeISO();
   }
   el.innerHTML = `
-    <div class="cab"><div><h1>Fechamento por dia</h1>
-      <p>Peças e tempo total (minutos) de cada operador(a) no dia de produção escolhido. Base da premiação.</p></div></div>
+    ${embutido ? '<p class="muted" style="margin-top:0">Peças e tempo total (minutos) de cada operador(a) no dia de produção escolhido. Base da premiação.</p>' : `<div class="cab"><div><h1>Fechamento por dia</h1>
+      <p>Peças e tempo total (minutos) de cada operador(a) no dia de produção escolhido. Base da premiação.</p></div></div>`}
     <div class="filtros">
       <button class="btn" id="ant" title="Dia anterior">◀</button>
       <div class="campo"><label>Dia de produção</label><input type="date" id="dia" value="${h(diaAtual)}"></div>
@@ -78,7 +78,7 @@ export async function render(el) {
         <td class="dir forte">${num(q)}</td><td class="dir forte">${num(m)}</td></tr>`;
     }
     res.innerHTML = `
-      ${semTempo ? `<div class="aviso-box">⚠️ ${semTempo} linha(s) com peças e tempo zero: o processo não tem tempo padrão cadastrado para aquele modelo/tecido. Confira na aba <a href="#/roteiro">Tempo padrão</a>.</div>` : ''}
+      ${semTempo ? `<div class="aviso-box">⚠️ ${semTempo} linha(s) com peças e tempo zero: o processo não tem tempo padrão cadastrado para aquele modelo/tecido. Confira em <a href="#/roteiro">Tempo padrão por modelo</a>.</div>` : ''}
       <div class="tabela-wrap"><table>
         <thead><tr><th>Operador(a)</th><th>Processo</th><th class="dir">Quantidade total</th><th class="dir">Tempo total (min)</th></tr></thead>
         <tbody>${corpo}</tbody>

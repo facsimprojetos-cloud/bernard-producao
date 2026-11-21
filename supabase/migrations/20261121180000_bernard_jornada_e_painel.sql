@@ -128,7 +128,7 @@ begin
        'embalado', (select coalesce(sum(least(embalado, qtd)), 0) from itens)),
     'conciliacao', (select coalesce(jsonb_agg(jsonb_build_object('processo', processo, 'cortado', cortado, 'apontado', apontado,
                    'pct', case when cortado > 0 then round(100.0 * apontado / cortado, 1) end) order by seq nulls last, processo), '[]') from concil),
-    'cortes', (select coalesce(jsonb_agg(jsonb_build_object('nome', nome, 'data', data, 'produto', produto, 'tecido', tecido,
+    'cortes', (select coalesce(jsonb_agg(jsonb_build_object('id', id, 'nome', nome, 'data', data, 'produto', produto, 'tecido', tecido,
                    'cortado', cortado, 'embalado', embalado, 'ultimo', ultimo, 'itens', itens, 'itens_fin', itens_fin, 'itens_parados', itens_parados,
                    'status', case when itens_fin = itens then 'finalizado' when itens_parados > 0 then 'parado' else 'em_producao' end)
                    order by (itens_parados > 0) desc, data), '[]') from cortes_res)

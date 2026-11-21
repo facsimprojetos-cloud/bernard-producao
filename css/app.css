@@ -279,3 +279,13 @@ h2.sec{font-size:1rem;margin:18px 0 8px;color:var(--pri-2)}
 .mini-barra{position:relative;min-width:120px;height:20px;background:#f3f2ee;border-radius:5px;overflow:hidden}
 .mini-barra span{position:absolute;inset:0 auto 0 0;background:var(--acento-2);border-right:2px solid var(--acento)}
 .mini-barra b{position:relative;font-size:.8rem;padding-left:6px;line-height:20px}
+tr.clicavel{cursor:pointer}
+tr.clicavel:hover td{background:var(--acento-2)}
+#abas-painel{margin-top:4px}
+.grade-cor td.cel{text-align:right;line-height:1.1;min-width:64px}
+.grade-cor td.cel b{display:block;font-size:1rem}
+.grade-cor td.cel small{color:var(--sub);font-size:.72rem}
+.grade-cor td.cel-parado{background:var(--alerta-bg);box-shadow:inset 3px 0 0 var(--alerta)}
+.grade-cor td.cel-em_producao{background:var(--info-bg);box-shadow:inset 3px 0 0 var(--info)}
+.grade-cor td.cel-finalizado{background:var(--ok-bg);box-shadow:inset 3px 0 0 var(--ok)}
+.grade-cor td.cel-finalizado b{color:var(--ok)}

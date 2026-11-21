@@ -1,9 +1,9 @@
-import { db } from '../estado.js';
-import { h, num, chip, toast, msgErro, hojeISO, data } from '../util.js';
+import { db, tem } from '../estado.js';
+import { h, num, chip, toast, msgErro, hojeISO, data, modal } from '../util.js';
 
 // Painel (Gestão, só admin): produção (peças embaladas = último processo), minutos, eficiência pela jornada,
 // corte do período (finalizado / em produção / parado) e conferência corte × lançamentos por processo.
-const st = { periodo: 'mes', ini: null, fim: null, diasParado: 5, filtroCorte: 'parado' };
+const st = { periodo: 'mes', ini: null, fim: null, diasParado: 5, filtroCorte: 'parado', aba: null };
 const STATUS = {
   finalizado: { nome: 'Finalizado', cor: 'var(--ok)', chip: 'ok' },
   em_producao: { nome: 'Em produção', cor: 'var(--info)', chip: 'info' },
@@ -26,61 +26,95 @@ function intervalo(p) {
   }
 }
 
+const ABAS = [['resumo', 'Resumo'], ['operadores', 'Por operador'], ['processos', 'Por processo'], ['cortes', 'Cortes'], ['fechamento', 'Fechamento por dia']];
+let cacheDados = { chave: null, d: null };
+
 export async function render(el) {
+  const admin = tem('admin');
+  if (!admin) st.aba = 'fechamento';
+  if (!st.aba) st.aba = 'resumo';
   if (!st.ini) [st.ini, st.fim] = intervalo(st.periodo);
   const opt = (v, n) => `<option value="${v}" ${st.periodo === v ? 'selected' : ''}>${n}</option>`;
+  const fech = st.aba === 'fechamento';
   el.innerHTML = `
-    <div class="cab"><div><h1>Painel</h1><p>Produção, corte e conferência dos apontamentos. Peças produzidas = peças apontadas na Embalagem.</p></div></div>
-    <div class="filtros">
+    <div class="cab"><div><h1>Painel</h1><p>Produção, corte, conferência dos apontamentos e fechamento. Peças produzidas = peças apontadas na Embalagem.</p></div></div>
+    ${fech ? '' : `<div class="filtros">
       <div class="campo"><label>Período</label><select id="per">${opt('hoje', 'Hoje')}${opt('ontem', 'Ontem')}${opt('semana', 'Esta semana')}${opt('semana_ant', 'Semana passada')}${opt('mes', 'Este mês')}${opt('mes_ant', 'Mês passado')}${opt('30', 'Últimos 30 dias')}${opt('outro', 'Escolher datas')}</select></div>
       <div class="campo"><label>De</label><input type="date" id="ini" value="${h(st.ini)}"></div>
       <div class="campo"><label>Até</label><input type="date" id="fim" value="${h(st.fim)}"></div>
-      <div class="campo" style="max-width:150px"><label>Parado há (dias)</label><input type="number" id="dp" min="1" max="60" value="${st.diasParado}"></div>
-    </div>
+      <div class="campo" style="max-width:170px"><label title="Pacote sem nenhum apontamento há esse número de dias (ou desde o corte) conta como parado">Parado: sem apontar há (dias)</label><input type="number" id="dp" min="1" max="60" value="${st.diasParado}"></div>
+    </div>`}
+    <div class="abas" id="abas-painel">${ABAS.filter(([k]) => admin || k === 'fechamento').map(([k, n]) => `<button type="button" data-aba="${k}" class="${k === st.aba ? 'ativo' : ''}">${n}</button>`).join('')}</div>
     <div id="res"><p class="muted">Carregando…</p></div>`;
+  el.querySelectorAll('[data-aba]').forEach(b => b.onclick = () => { st.aba = b.dataset.aba; render(el); });
+  const box = el.querySelector('#res');
+  if (fech) {
+    const m = await import(`./fechamento.js?v=${document.querySelector('script[type=module]')?.src.split('v=')[1] || ''}`);
+    return m.render(box, { embutido: true });
+  }
   el.querySelector('#per').onchange = (e) => { st.periodo = e.target.value; if (st.periodo !== 'outro') [st.ini, st.fim] = intervalo(st.periodo); render(el); };
   const datas = () => { st.periodo = 'outro'; st.ini = el.querySelector('#ini').value; st.fim = el.querySelector('#fim').value; render(el); };
   el.querySelector('#ini').onchange = datas; el.querySelector('#fim').onchange = datas;
   el.querySelector('#dp').onchange = (e) => { st.diasParado = Math.max(1, Number(e.target.value) || 5); render(el); };
-  if (!st.ini || !st.fim || st.ini > st.fim) { el.querySelector('#res').innerHTML = '<div class="card">Escolha um período válido.</div>'; return; }
+  if (!st.ini || !st.fim || st.ini > st.fim) { box.innerHTML = '<div class="card">Escolha um período válido.</div>'; return; }
 
-  const { data: d, error } = await db.rpc('painel', { p_ini: st.ini, p_fim: st.fim, p_dias_parado: st.diasParado });
-  if (error) { el.querySelector('#res').innerHTML = `<div class="erro-box">${h(msgErro(error))}</div>`; return; }
-  desenhar(el.querySelector('#res'), d);
+  const chave = `${st.ini}|${st.fim}|${st.diasParado}`;
+  if (cacheDados.chave !== chave) {
+    const { data: d, error } = await db.rpc('painel', { p_ini: st.ini, p_fim: st.fim, p_dias_parado: st.diasParado });
+    if (error) { box.innerHTML = `<div class="erro-box">${h(msgErro(error))}</div>`; return; }
+    cacheDados = { chave, d };
+  }
+  const d = cacheDados.d;
+  ({ resumo, operadores: abaOperadores, processos: abaProcessos, cortes: abaCortes })[st.aba](box, d);
 }
 
-function desenhar(box, d) {
-  const p = d.producao, c = d.corte;
-  const semJornada = d.ranking.some(r => r.jornada_incompleta);
-  const card = (rot, val, sub = '', cor = '') => `<div class="kpi"${cor ? ` style="border-top:3px solid ${cor}"` : ''}><small>${rot}</small><b>${val}</b>${sub ? `<span>${sub}</span>` : ''}</div>`;
-  const pct = (a, b) => b ? `${num(100 * a / b, 0)}% do cortado` : '';
-  box.innerHTML = `
-    <h2 class="sec">Produção · ${h(data(d.periodo.ini))} a ${h(data(d.periodo.fim))}</h2>
-    <div class="kpis">
-      ${card('Peças produzidas (embaladas)', num(p.embalados), `embaladas no período, de cortes de qualquer data`)}
-      ${card('Minutos produzidos', num(p.minutos), `${num(p.minutos / 60, 0)} h · ${num(p.operadoras)} operador(es)`)}
-      ${card('Eficiência', p.eficiencia == null ? '—' : `${num(p.eficiencia, 1)}%`, p.eficiencia == null || semJornada ? '<a href="#/cadastros">cadastre a jornada</a> de todos' : 'minutos produzidos ÷ jornada')}
-    </div>
-    <h2 class="sec">Corte · cortes com data no período</h2>
+const card = (rot, val, sub = '', cor = '') => `<div class="kpi"${cor ? ` style="border-top:3px solid ${cor}"` : ''}><small>${rot}</small><b>${val}</b>${sub ? `<span>${sub}</span>` : ''}</div>`;
+const pct = (a, b) => b ? `${num(100 * a / b, 0)}% do cortado` : '';
+
+function cardsCorte(d) {
+  const c = d.corte;
+  return `<h2 class="sec">Corte · cortes com data no período</h2>
     <div class="kpis">
       ${card('Peças cortadas', num(c.cortado), `${num(c.cortes)} corte(s)`)}
       ${card('Finalizado', num(c.finalizado), pct(c.finalizado, c.cortado), STATUS.finalizado.cor)}
       ${card('Em produção', num(c.em_producao), pct(c.em_producao, c.cortado), STATUS.em_producao.cor)}
       ${card('Parado', num(c.parado), `${pct(c.parado, c.cortado)} · sem apontamento há ${d.periodo.dias_parado}+ dias`, STATUS.parado.cor)}
     </div>
-    ${barraStatus(c)}
+    ${barraStatus(c)}`;
+}
+
+function resumo(box, d) {
+  const p = d.producao;
+  const semJornada = d.ranking.some(r => r.jornada_incompleta);
+  box.innerHTML = `
+    <h2 class="sec">Produção · ${h(data(d.periodo.ini))} a ${h(data(d.periodo.fim))}</h2>
+    <div class="kpis">
+      ${card('Peças produzidas (embaladas)', num(p.embalados), 'embaladas no período, de cortes de qualquer data')}
+      ${card('Minutos produzidos', num(p.minutos), `${num(p.minutos / 60, 0)} h · ${num(p.operadoras)} operador(es)`)}
+      ${card('Eficiência', p.eficiencia == null ? '—' : `${num(p.eficiencia, 1)}%`, p.eficiencia == null || semJornada ? '<a href="#/cadastros">cadastre a jornada</a> de todos' : 'minutos produzidos ÷ jornada')}
+    </div>
+    ${cardsCorte(d)}
     <div class="painel-2">
       <div class="card"><h3>Peças produzidas por dia</h3><p class="muted peq">Embalagem</p>${barras(d.por_dia, 'embalados', 'peças')}</div>
       <div class="card"><h3>Minutos produzidos por dia</h3><p class="muted peq">Todos os processos</p>${barras(d.por_dia, 'minutos', 'min')}</div>
-    </div>
-    <div class="painel-2">
-      <div class="card"><h3>Ranking por operador</h3>${ranking(d.ranking)}</div>
+    </div>`;
+}
+
+function abaOperadores(box, d) {
+  box.innerHTML = `<div class="card"><h3>Produção por operador · ${h(data(d.periodo.ini))} a ${h(data(d.periodo.fim))}</h3>${ranking(d.ranking)}</div>`;
+}
+
+function abaProcessos(box, d) {
+  box.innerHTML = `<div class="painel-2">
+      <div class="card"><h3>Produção por processo · ${h(data(d.periodo.ini))} a ${h(data(d.periodo.fim))}</h3><p class="muted peq">Tudo o que foi apontado no período.</p>${porProcesso(d.por_processo)}</div>
       <div class="card"><h3>Conferência corte × apontamentos</h3>
-        <p class="muted peq">Só os cortes do período (${num(c.cortado)} peças cortadas): quantas dessas peças já foram apontadas em cada processo, em qualquer data. Processo muito abaixo dos outros indica bip esquecido.</p>
+        <p class="muted peq">Só os cortes do período (${num(d.corte.cortado)} peças cortadas): quantas dessas peças já foram apontadas em cada processo, em qualquer data. Processo muito abaixo dos outros indica bip esquecido.</p>
         ${conciliacao(d.conciliacao)}</div>
-    </div>
-    <div class="card"><h3>Produção por processo</h3>${porProcesso(d.por_processo)}</div>
-    <div class="card" id="cortes"></div>`;
+    </div>`;
+}
+
+function abaCortes(box, d) {
+  box.innerHTML = `${cardsCorte(d)}<div class="card" id="cortes"></div>`;
   desenharCortes(box.querySelector('#cortes'), d.cortes);
 }
 
@@ -144,15 +178,50 @@ function desenharCortes(box, cortes) {
   const cont = (k) => cortes.filter(c => k === 'todos' || c.status === k).length;
   const lista = cortes.filter(c => st.filtroCorte === 'todos' || c.status === st.filtroCorte);
   const btn = (k, n) => `<button type="button" data-f="${k}" class="${st.filtroCorte === k ? 'ativo' : ''}">${n} (${cont(k)})</button>`;
-  box.innerHTML = `<h3>Cortes do período</h3>
+  box.innerHTML = `<h3>Cortes do período</h3><p class="muted peq">Clique no corte para ver cor × tamanho.</p>
     <div class="abas">${btn('parado', 'Parados')}${btn('em_producao', 'Em produção')}${btn('finalizado', 'Finalizados')}${btn('todos', 'Todos')}</div>
     ${lista.length ? `<div class="tabela-wrap"><table>
       <thead><tr><th>Corte</th><th>Data</th><th>Modelo · tecido</th><th class="dir">Cortado</th><th class="dir">Embalado</th><th>Andamento</th><th>Último apontamento</th><th>Status</th></tr></thead>
-      <tbody>${lista.map(c => `<tr><td class="forte">${h(c.nome)}</td><td>${h(data(c.data))}</td><td>${h(c.produto)} · ${h(c.tecido || '')}</td>
+      <tbody>${lista.map(c => `<tr class="clicavel" data-corte="${h(c.id)}" title="Ver cor × tamanho"><td class="forte">${h(c.nome)} <span class="muted peq">▸</span></td><td>${h(data(c.data))}</td><td>${h(c.produto)} · ${h(c.tecido || '')}</td>
         <td class="dir">${num(c.cortado)}</td><td class="dir">${num(c.embalado)}</td>
         <td><div class="mini-barra"><span style="width:${c.cortado ? 100 * c.embalado / c.cortado : 0}%"></span><b>${c.cortado ? num(100 * c.embalado / c.cortado, 0) : 0}%</b></div></td>
         <td>${c.ultimo ? h(data(c.ultimo)) : '<span class="muted">nunca</span>'}</td>
         <td>${chip(STATUS[c.status].nome, STATUS[c.status].chip)}${c.status === 'parado' && c.itens_parados < c.itens ? ` <span class="muted peq">${c.itens_parados} de ${c.itens} pacotes</span>` : ''}</td></tr>`).join('')}</tbody></table></div>`
       : '<p class="muted">Nenhum corte nesse filtro.</p>'}`;
   box.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { st.filtroCorte = b.dataset.f; desenharCortes(box, cortes); });
+  box.querySelectorAll('[data-corte]').forEach(tr => tr.onclick = () => detalheCorte(cortes.find(c => c.id === tr.dataset.corte)));
+}
+
+// ---------- Detalhe do corte: cor × tamanho ----------
+async function detalheCorte(c) {
+  const m = modal({ titulo: `Corte ${c.nome}`, largo: true, corpo: '<p class="muted">Carregando…</p>' });
+  const { data: itens, error } = await db.rpc('corte_andamento', { p_corte: c.id, p_dias_parado: st.diasParado });
+  const corpo = m.el.querySelector('.modal-corpo');
+  if (error) { corpo.innerHTML = `<div class="erro-box">${h(msgErro(error))}</div>`; return; }
+  const tams = [...new Map(itens.map(i => [i.tamanho, i.ordem])).entries()].sort((a, b) => a[1] - b[1]).map(x => x[0]);
+  const cores = [...new Set(itens.map(i => i.cor))];
+  const cel = (cor, tam) => {
+    const xs = itens.filter(i => i.cor === cor && i.tamanho === tam);
+    if (!xs.length) return '<td class="cel-vazia"></td>';
+    const q = xs.reduce((s, i) => s + i.qtd, 0), e = xs.reduce((s, i) => s + Math.min(i.embalado, i.qtd), 0);
+    const stt = xs.some(i => i.status === 'parado') ? 'parado' : xs.every(i => i.status === 'finalizado') ? 'finalizado' : 'em_producao';
+    return `<td class="cel cel-${stt}" title="${h(cor)} ${h(tam)}: ${num(e)} de ${num(q)} embaladas · ${STATUS[stt].nome}"><b>${num(q - e)}</b><small>${num(e)}/${num(q)}</small></td>`;
+  };
+  const pend = itens.filter(i => i.status !== 'finalizado');
+  corpo.innerHTML = `
+    <p class="muted peq" style="margin-top:0">${h(data(c.data))} · ${h(c.produto)} · ${h(c.tecido || '')} · cortado ${num(c.cortado)} · embalado ${num(c.embalado)}.
+      Em cada célula: <b>peças que faltam embalar</b> e embaladas/cortadas.</p>
+    <div class="legenda">${Object.entries(STATUS).map(([, s]) => `<span><i style="background:${s.cor}"></i>${s.nome}</span>`).join('')}</div>
+    <div class="tabela-wrap"><table class="grade-cor">
+      <thead><tr><th>Cor</th>${tams.map(t => `<th class="dir">${h(t)}</th>`).join('')}<th class="dir">Falta</th></tr></thead>
+      <tbody>${cores.map(cor => {
+        const xs = itens.filter(i => i.cor === cor), falta = xs.reduce((s, i) => s + Math.max(0, i.qtd - i.embalado), 0);
+        return `<tr><td class="forte">${h(cor)}</td>${tams.map(t => cel(cor, t)).join('')}<td class="dir forte">${num(falta)}</td></tr>`;
+      }).join('')}</tbody></table></div>
+    ${pend.length ? `<h3 style="margin-top:14px">Pacotes não finalizados (${pend.length})</h3>
+      <div class="tabela-wrap"><table>
+        <thead><tr><th>Pacote</th><th>Cor · tam.</th><th class="dir">Peças</th><th>Processos que faltam</th><th>Último apontamento</th></tr></thead>
+        <tbody>${pend.map(i => `<tr><td>${chip(i.codigo, 'info')}</td><td class="forte">${h(i.cor)} · ${h(i.tamanho)}</td><td class="dir">${num(i.qtd)}</td>
+          <td>${i.processos.filter(p => p.apontado < i.qtd).map(p => chip(`${p.processo} ${num(p.apontado)}/${num(i.qtd)}`, p.apontado ? 'alerta' : '')).join(' ') || '<span class="muted">—</span>'}</td>
+          <td>${i.ultimo ? h(data(i.ultimo)) : '<span class="muted">nunca</span>'} ${chip(STATUS[i.status].nome, STATUS[i.status].chip)}</td></tr>`).join('')}</tbody></table></div>` : ''}`;
 }
