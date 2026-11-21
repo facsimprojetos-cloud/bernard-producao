@@ -1,6 +1,6 @@
 import { db, tem } from '../estado.js';
 import { h, num, data, chip, ler, toast, msgErro, confirmar, modal, opcoes, hojeISO, cadastros, ativos, porId, pedirTexto, limparCache } from '../util.js';
-import { abrirEtiquetas } from '../etiquetas.js?v=202611211140';
+import { abrirEtiquetas } from '../etiquetas.js?v=202611211200';
 
 let cad = null;
 let busca = '';
@@ -116,13 +116,12 @@ async function editor(el, id) {
     </form>
     ${pode ? `<div class="card">
       <h2>Adicionar em grade</h2>
-      <div class="grade g4">
-        <label class="campo" style="grid-column:span 2">Cor<select id="g-cor">${opcoesCor(coresCorte, null)}</select></label>
-        <div class="campo" style="align-self:end"><button type="button" class="btn" id="g-nova-cor">+ Adicionar cor</button></div>
+      <div class="linha-cor-elas">
+        <label class="campo">Cor<select id="g-cor">${opcoesCor(coresCorte, null)}</select></label>
+        <button type="button" class="btn" id="g-nova-cor">+ Adicionar cor</button>
+        <label class="campo">Elástico<select id="g-elas">${opcoes(ativos(cad.elasticos), null, 'nome', 'id', 'Sem elástico')}</select></label>
+        <button type="button" class="btn" id="g-novo-elas">+ Adicionar elástico</button>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;margin:10px 0 4px"><span class="peq forte">Elástico(s)</span>
-        <button type="button" class="btn peq" id="g-novo-elas">+ Adicionar elástico</button></div>
-      <div class="elas" id="g-elas">${chipsElas(new Set())}</div>
       <div class="peq forte" style="margin:10px 0 4px">Quantidade por tamanho</div>
       <div class="grade-tam">${tamsAtivos.map(t => `<div><label>${h(t.nome)}</label><input type="number" min="0" inputmode="numeric" data-gt="${t.id}"></div>`).join('')}</div>
       <div class="acoes" style="margin-top:10px"><button class="btn acento" type="button" id="g-add">Adicionar linhas</button></div>
@@ -203,12 +202,8 @@ async function editor(el, id) {
   };
 
   // grade
-  const ligarGradeElas = () => el.querySelectorAll('#g-elas [data-e]').forEach(b => b.onclick = () => {
-    const v = Number(b.dataset.e);
-    gradeElas = gradeElas.includes(v) ? gradeElas.filter(x => x !== v) : [...gradeElas, v];
-    b.classList.toggle('on');
-  });
-  ligarGradeElas();
+  const selGradeElas = el.querySelector('#g-elas');
+  if (selGradeElas) selGradeElas.onchange = () => { gradeElas = selGradeElas.value ? [Number(selGradeElas.value)] : []; };
   el.querySelector('#g-nova-cor')?.addEventListener('click', async () => {
     const chave = await novaCor(); if (!chave) return;
     el.querySelector('#g-cor').innerHTML = opcoesCor(coresCorte, chave);
@@ -216,9 +211,9 @@ async function editor(el, id) {
   });
   el.querySelector('#g-novo-elas')?.addEventListener('click', async () => {
     const novo = await novoElastico(); if (!novo) return;
-    if (!gradeElas.includes(novo)) gradeElas.push(novo);
-    el.querySelector('#g-elas').innerHTML = chipsElas(new Set(gradeElas));
-    ligarGradeElas(); desenhar();
+    gradeElas = [novo];
+    selGradeElas.innerHTML = opcoes(ativos(cad.elasticos), novo, 'nome', 'id', 'Sem elástico');
+    desenhar();
   });
   el.querySelector('#g-add')?.addEventListener('click', () => {
     const [cid, tonTxt] = (el.querySelector('#g-cor').value || '|').split('|');
