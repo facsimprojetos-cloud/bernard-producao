@@ -26,16 +26,16 @@ function intervalo(p) {
   }
 }
 
-const ABAS = [['resumo', 'Resumo'], ['operadores', 'Por operador'], ['processos', 'Por processo'], ['cortes', 'Cortes'], ['fechamento', 'Fechamento por dia']];
+const ABAS = [['resumo', 'Resumo'], ['operadores', 'Por operador'], ['processos', 'Por processo'], ['cortes', 'Cortes'], ['fechamento', 'Fechamento por dia'], ['mensal', 'Fechamento mensal']];
 let cacheDados = { chave: null, d: null };
 
 export async function render(el) {
   const admin = tem('admin');
-  if (!admin) st.aba = 'fechamento';
+  if (!admin && !['fechamento', 'mensal'].includes(st.aba)) st.aba = 'fechamento';
   if (!st.aba) st.aba = 'resumo';
   if (!st.ini) [st.ini, st.fim] = intervalo(st.periodo);
   const opt = (v, n) => `<option value="${v}" ${st.periodo === v ? 'selected' : ''}>${n}</option>`;
-  const fech = st.aba === 'fechamento';
+  const fech = st.aba === 'fechamento' || st.aba === 'mensal';
   el.innerHTML = `
     <div class="cab"><div><h1>Painel</h1><p>Produção, corte, conferência dos apontamentos e fechamento. Peças produzidas = peças apontadas na Embalagem.</p></div></div>
     ${fech ? '' : `<div class="filtros">
@@ -44,13 +44,13 @@ export async function render(el) {
       <div class="campo"><label>Até</label><input type="date" id="fim" value="${h(st.fim)}"></div>
       <div class="campo" style="max-width:170px"><label title="Pacote sem nenhum apontamento há esse número de dias (ou desde o corte) conta como parado">Parado: sem apontar há (dias)</label><input type="number" id="dp" min="1" max="60" value="${st.diasParado}"></div>
     </div>`}
-    <div class="abas" id="abas-painel">${ABAS.filter(([k]) => admin || k === 'fechamento').map(([k, n]) => `<button type="button" data-aba="${k}" class="${k === st.aba ? 'ativo' : ''}">${n}</button>`).join('')}</div>
+    <div class="abas" id="abas-painel">${ABAS.filter(([k]) => admin || k === 'fechamento' || k === 'mensal').map(([k, n]) => `<button type="button" data-aba="${k}" class="${k === st.aba ? 'ativo' : ''}">${n}</button>`).join('')}</div>
     <div id="res"><p class="muted">Carregando…</p></div>`;
   el.querySelectorAll('[data-aba]').forEach(b => b.onclick = () => { st.aba = b.dataset.aba; render(el); });
   const box = el.querySelector('#res');
   if (fech) {
     const m = await import(`./fechamento.js?v=${document.querySelector('script[type=module]')?.src.split('v=')[1] || ''}`);
-    return m.render(box, { embutido: true });
+    return m.render(box, { embutido: true, modo: st.aba === 'mensal' ? 'mes' : 'dia' });
   }
   el.querySelector('#per').onchange = (e) => { st.periodo = e.target.value; if (st.periodo !== 'outro') [st.ini, st.fim] = intervalo(st.periodo); render(el); };
   const datas = () => { st.periodo = 'outro'; st.ini = el.querySelector('#ini').value; st.fim = el.querySelector('#fim').value; render(el); };
