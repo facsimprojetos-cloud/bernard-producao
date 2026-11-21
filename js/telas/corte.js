@@ -1,6 +1,6 @@
 import { db, tem } from '../estado.js';
 import { h, num, data, chip, ler, toast, msgErro, confirmar, modal, opcoes, hojeISO, cadastros, ativos, porId, pedirTexto, limparCache } from '../util.js';
-import { abrirEtiquetas } from '../etiquetas.js?v=202611211515';
+import { abrirEtiquetas } from '../etiquetas.js?v=202611211530';
 
 let cad = null;
 let busca = '';
@@ -46,11 +46,33 @@ async function lista(el) {
         <td>${h(c.tipo_risco || '')}</td><td>${data(c.data)}</td><td>${h(c.produto)}</td><td>${h(c.tecido || '')}</td>
         <td class="n">${num(c.linhas)}</td><td class="n">${num(c.pecas)}</td>
         <td><div class="acoes" style="flex-wrap:nowrap"><a class="btn peq" href="#/corte/${c.id}">${pode ? 'Abrir' : 'Ver'}</a>
-          <button class="btn peq pri" data-etq="${c.id}">Etiquetas</button></div></td></tr>`).join('')
+          <button class="btn peq pri" data-etq="${c.id}">Etiquetas</button>
+          ${tem('admin') ? `<button class="btn peq perigo" data-exc="${c.id}" title="Excluir corte">Excluir</button>` : ''}</div></td></tr>`).join('')
         || '<tr><td colspan="8" class="vazio">Nenhum corte encontrado.</td></tr>'}</tbody></table></div>`;
   el.querySelector('#f-busca').onsubmit = (e) => { e.preventDefault(); busca = el.querySelector('#busca').value.trim(); lista(el); };
   el.querySelector('#limpa')?.addEventListener('click', () => { busca = ''; lista(el); });
   el.querySelectorAll('[data-etq]').forEach(b => b.onclick = () => abrirEtiquetas(b.dataset.etq));
+  el.querySelectorAll('[data-exc]').forEach(b => b.onclick = () => excluirCorte(cortes.find(c => c.id === b.dataset.exc), () => lista(el)));
+}
+
+// Excluir corte (só admin). Se já tem apontamentos, mostra o impacto e exige confirmação dupla.
+async function excluirCorte(c, depois) {
+  const nome = `${c.numero}${c.sequencia > 1 ? '/' + c.sequencia : ''}${c.tipo_risco ? ' ' + c.tipo_risco : ''}`;
+  const { data: r, error } = await db.rpc('corte_resumo_exclusao', { p_corte: c.id });
+  if (error) return toast(msgErro(error), 'erro');
+  const tem_ap = Number(r.apontamentos) > 0;
+  const texto = `Excluir o corte <b>${h(nome)}</b> (${h(c.produto)} · ${h(c.tecido || '')}, ${num(r.itens)} linha(s), ${num(r.pecas)} peças)?
+    As etiquetas desse corte deixam de funcionar no bip.` + (tem_ap
+    ? `<div class="erro-box" style="margin-top:8px"><b>Este corte já tem ${num(r.apontamentos)} apontamento(s)</b> (${num(r.pecas_apontadas)} peças, ${num(r.minutos)} min, dias ${h(r.dias || '')}).
+       Eles também serão excluídos e <b>saem do fechamento e da premiação</b>.</div>` : '');
+  const motivo = await pedirTexto('Excluir corte', texto, { rotulo: 'Motivo da exclusão (fica registrado)', botao: tem_ap ? 'Continuar' : 'Excluir corte' });
+  if (!motivo) return;
+  if (tem_ap && !await confirmar('Confirmar exclusão com apontamentos',
+    `Confirma excluir o corte <b>${h(nome)}</b> e os <b>${num(r.apontamentos)} apontamento(s)</b> dele? Não dá para desfazer pela tela.`, 'Excluir tudo', 'perigo')) return;
+  const { data: x, error: e2 } = await db.rpc('excluir_corte', { p_corte: c.id, p_motivo: motivo, p_com_apontamentos: tem_ap });
+  if (e2) return toast(msgErro(e2), 'erro');
+  toast(`Corte ${nome} excluído${x.apontamentos_excluidos ? ` com ${x.apontamentos_excluidos} apontamento(s)` : ''}.`, 'ok');
+  depois();
 }
 
 // ---------- Editor (novo ou existente) ----------
