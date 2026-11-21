@@ -9,7 +9,10 @@ let cad = null;
 
 export async function render(el) {
   cad = await cadastros(db, true);
-  if (!st.ini) { const d = new Date(hojeISO() + 'T12:00:00'); d.setDate(d.getDate() - 6); st.ini = d.toLocaleDateString('en-CA'); st.fim = hojeISO(); }
+  if (!st.ini) { // abre no último dia com apontamento
+    const ult = await ler(db.from('apontamentos').select('data_producao').order('data_producao', { ascending: false }).limit(1));
+    st.ini = st.fim = ult[0]?.data_producao || hojeISO();
+  }
   const funcs = [...cad.funcionarios].sort((a, b) => a.nome.localeCompare(b.nome));
   const procs = [...cad.processos].sort((a, b) => a.nome.localeCompare(b.nome));
   const sel = (id, lista, v, vazio) => `<select id="${id}"><option value="">${vazio}</option>${lista.map(x => `<option value="${x.id}" ${String(x.id) === String(v) ? 'selected' : ''}>${h(x.nome)}${x.ativo === false ? ' (inativo)' : ''}</option>`).join('')}</select>`;
@@ -68,7 +71,7 @@ async function carregar(el) {
       <div><small>Peças</small><b>${num(pecas)}</b></div>
       <div><small>Minutos</small><b>${num(mins)}</b></div>
     </div>
-    ${lista.length >= LIMITE ? `<div class="aviso-box">Mostrando os ${LIMITE} mais recentes. Use os filtros ou um período menor para ver o resto.</div>` : ''}
+    ${lista.length >= LIMITE ? `<div class="aviso-box">Mostrando só os ${LIMITE} mais recentes (os totais acima são só deles). Use os filtros ou um período menor.</div>` : ''}
     <div class="tabela-wrap"><table>
       <thead><tr><th>Dia</th><th>Hora</th><th>Pacote</th><th>Processo</th><th>Operador(a)</th><th class="dir">Peças</th><th class="dir">Min</th><th>Obs.</th><th></th></tr></thead>
       <tbody>${lista.map(a => {
