@@ -3,10 +3,10 @@ import { db } from './estado.js';
 import { h, num, ler, modal, toast, qrSvg, imprimirHtml, nomeArquivo, cadastros } from './util.js';
 
 // Medidas em mm. "folha" = folha de acompanhamento da caixa (igual à FOLHA DE IMPRESSÃO do AppSheet):
-// 6 por A4 (2×3), com QR, dados do pacote e a lista de processos para assinar (nome e data).
+// 8 por A4 (2×4), com QR, dados do pacote e a lista de processos para assinar (nome e data).
 // As demais: etiquetas adesivas Pimaco/Avery e térmicas.
 export const LAYOUTS = {
-  folha: { nome: 'Folha de acompanhamento da caixa (6 por A4, com processos para assinar)', acompanhamento: true },
+  folha: { nome: 'Folha de acompanhamento da caixa (8 por A4, com processos para assinar)', acompanhamento: true },
   a4_21: { nome: 'A4 · 21 por folha (3×7, 63,5×38,1 mm · Pimaco A4360 / Avery L7160)', folha: true, col: 3, lin: 7, w: 63.5, h: 38.1, top: 15.15, left: 7.21, gx: 2.54, gy: 0 },
   a4_14: { nome: 'A4 · 14 por folha (2×7, 99,1×38,1 mm · Pimaco A4362 / Avery L7163)', folha: true, col: 2, lin: 7, w: 99.1, h: 38.1, top: 15.15, left: 4.65, gx: 2.5, gy: 0 },
   a4_24: { nome: 'A4 · 24 por folha (3×8, 70×37 mm, sem margem)', folha: true, col: 3, lin: 8, w: 70, h: 37, top: 0.5, left: 0, gx: 0, gy: 0 },
@@ -35,15 +35,18 @@ function etiqueta(it, L) {
 const corDe = (it) => `${it.cor || ''}${it.tonalidade ? ' ' + it.tonalidade : ''}`;
 const nomeCorte = (it) => `${it.numero}${it.sequencia > 1 ? '/' + it.sequencia : ''}${it.tipo_risco ? ' ' + String(it.tipo_risco).toUpperCase() : ''}`;
 
+// fonte menor quando o texto não cabe na célula
+const tam = (txt, lim = 20) => String(txt).length > lim + 3 ? 'mini2' : String(txt).length > lim ? 'mini' : '';
+
 function folhaAcompanhamento(it, processos) {
   const lin = processos.length + 4;
   return `<div class="fa-card"><table class="fa">
-    <colgroup><col style="width:19mm"><col style="width:27mm"><col><col style="width:11mm"><col style="width:21mm"></colgroup>
-    <tr><td class="fa-qr" rowspan="${lin}"><div class="fa-qr-img">${qrSvg(it.codigo)}</div><div class="fa-cod">${h(it.codigo)}</div></td>
-      <th>CORTE</th><td class="v nome">${h(`${nomeCorte(it)}-${corDe(it)}-${it.tamanho}`)}</td><th>QTD:</th><td class="v">${num(it.qtd)}</td></tr>
-    <tr><th>TAM</th><td class="v">${h(it.tamanho)}</td><th>COR:</th><td class="v nome">${h(corDe(it))}</td></tr>
-    <tr><th>ELÁSTICO</th><td class="v" colspan="3">${h(it.elastico || '')}</td></tr>
-    <tr class="fa-cab"><th>PROCESSO</th><th colspan="2">NOME</th><th>DATA</th></tr>
+    <colgroup><col style="width:14.6mm"><col style="width:21.8mm"><col><col style="width:11.4mm"><col style="width:21.9mm"></colgroup>
+    <tr class="fa-h"><td class="fa-qr" rowspan="${lin}"><div class="fa-qr-img">${qrSvg(it.codigo)}</div><div class="fa-cod">${h(it.codigo)}</div></td>
+      <th>CORTE</th><td class="v nome ${tam(`${nomeCorte(it)}-${corDe(it)}-${it.tamanho}`)}">${h(`${nomeCorte(it)}-${corDe(it)}-${it.tamanho}`)}</td><th>QTD:</th><td class="v">${num(it.qtd)}</td></tr>
+    <tr class="fa-h"><th>TAM</th><td class="v">${h(it.tamanho)}</td><th>COR:</th><td class="v nome ${tam(corDe(it), 12)}">${h(corDe(it))}</td></tr>
+    <tr class="fa-h"><th>ELÁSTICO</th><td class="v" colspan="3">${h(it.elastico || '')}</td></tr>
+    <tr class="fa-h fa-cab"><th>PROCESSO</th><th colspan="2">NOME</th><th>DATA</th></tr>
     ${processos.map(p => `<tr class="fa-p"><td class="pn">${h(String(p).toUpperCase())}</td><td colspan="2"></td><td></td></tr>`).join('')}
   </table></div>`;
 }
@@ -52,9 +55,9 @@ export function htmlEtiquetas(itens, { layout = 'folha', inicio = 1, copias = 1,
   const L = LAYOUTS[layout] || LAYOUTS.folha;
   const lista = itens.flatMap(it => Array.from({ length: Math.max(1, copias) }, () => it));
   if (L.acompanhamento) {
-    const vagas = [...Array(Math.max(0, Math.min(inicio - 1, 5))).fill(null), ...lista];
+    const vagas = [...Array(Math.max(0, Math.min(inicio - 1, 7))).fill(null), ...lista];
     const folhas = [];
-    for (let i = 0; i < vagas.length; i += 6) folhas.push(vagas.slice(i, i + 6));
+    for (let i = 0; i < vagas.length; i += 8) folhas.push(vagas.slice(i, i + 8));
     return `<style>@page{size:A4;margin:0}</style>` + folhas.map(f => `<div class="folha-fa ${guias ? 'guia' : ''}">${
       f.map(it => it ? folhaAcompanhamento(it, processos) : '<div class="fa-card vazio"></div>').join('')}</div>`).join('');
   }
@@ -134,7 +137,7 @@ export async function abrirEtiquetas(corteId) {
         const o = opcoes(m), L = LAYOUTS[o.layout];
         m.querySelector('#lb-ini').style.display = (L.folha || L.acompanhamento) ? '' : 'none';
         const n = itens.filter(it => m.querySelector(`[data-it="${it.id}"]`).checked).length * o.copias;
-        const porFolha = L.acompanhamento ? 6 : (L.col || 1) * (L.lin || 1);
+        const porFolha = L.acompanhamento ? 8 : (L.col || 1) * (L.lin || 1);
         const folhas = (L.folha || L.acompanhamento) ? Math.ceil((n + o.inicio - 1) / porFolha) : n;
         m.querySelector('#e-info').textContent = `${n} ${L.acompanhamento ? 'cartão(ões)' : 'etiqueta(s)'} · ${folhas} ${(L.folha || L.acompanhamento) ? 'folha(s) A4' : 'etiqueta(s) térmica(s)'}`
           + (L.acompanhamento ? ` · processos: ${processos.join(', ')}` : '');
