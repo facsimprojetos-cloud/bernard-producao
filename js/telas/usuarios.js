@@ -1,5 +1,5 @@
 import { db, ctx } from '../estado.js';
-import { h, chip, modal, ler, toast, msgErro } from '../util.js';
+import { h, chip, modal, ler, toast, msgErro, confirmar } from '../util.js';
 import { DOMINIO_INTERNO } from '../config.js';
 
 const PERFIS = [
@@ -25,11 +25,25 @@ export async function render(el) {
         <td>${(u.perfis || []).map(p => chip(p, p === 'admin' ? 'acento' : '')).join(' ')}</td>
         <td>${u.ativo ? chip('Ativo', 'ok') : chip('Inativo', 'erro')}</td>
         <td style="white-space:nowrap"><button class="btn peq" data-ed="${u.usuario_id}">Editar</button>
-          ${interno(u.email) ? `<button class="btn peq" data-senha="${u.usuario_id}">Redefinir senha</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
+          ${interno(u.email) ? `<button class="btn peq" data-senha="${u.usuario_id}">Redefinir senha</button>` : ''}
+          ${String(u.email).toLowerCase() !== String(ctx.usuario?.email || '').toLowerCase() ? `<button class="btn peq perigo" data-exc="${u.usuario_id}">Excluir</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
   const recarregar = () => render(el);
   el.querySelector('#novo').onclick = () => form(null, recarregar);
   el.querySelectorAll('[data-ed]').forEach(b => b.onclick = () => form(usuarios.find(u => String(u.usuario_id) === b.dataset.ed), recarregar));
   el.querySelectorAll('[data-senha]').forEach(b => b.onclick = () => senha(usuarios.find(u => String(u.usuario_id) === b.dataset.senha)));
+  el.querySelectorAll('[data-exc]').forEach(b => b.onclick = () => excluir(usuarios.find(u => String(u.usuario_id) === b.dataset.exc), recarregar));
+}
+
+async function excluir(u, depois) {
+  const login = loginDe(u.email);
+  const txt = interno(u.email)
+    ? `Excluir <b>${h(u.nome || login)}</b> (usuário <b>${h(login)}</b>)? O login e a senha deixam de existir e quem usa esse acesso não entra mais. Os apontamentos já feitos continuam no histórico.`
+    : `Excluir <b>${h(u.nome || login)}</b> (${h(u.email)})? Esse e-mail perde o acesso ao Bernard. Os apontamentos já feitos continuam no histórico.`;
+  if (!await confirmar('Excluir usuário', txt, 'Excluir', 'perigo')) return;
+  const { error } = await db.rpc('excluir_usuario', { p_usuario_id: u.usuario_id });
+  if (error) return toast(msgErro(error), 'erro');
+  toast(`Usuário ${login} excluído.`, 'ok');
+  depois();
 }
 
 function caixasPerfis(sel) {
