@@ -87,7 +87,7 @@ export async function render(el, { embutido = false, modo = 'dia' } = {}) {
       itens.forEach((i, n) => {
         if (i.sem_tempo) semTempo++;
         corpo += `<tr><td class="forte">${n === 0 ? h(func) : ''}</td>
-          <td>${h(i.processo)}${i.sem_tempo && !paraImprimir ? ' ' + chip('sem tempo padrão', 'erro') : ''}</td>
+          <td>${h(i.processo)}${i.sem_tempo && !paraImprimir ? ' ' + chip(Number(i.minutos) ? 'parte sem tempo padrão' : 'sem tempo padrão', 'erro') : ''}</td>
           <td class="dir">${num(i.qtd)}</td><td class="dir">${num(i.minutos)}</td>
           ${um ? extras(op) + eff(op) : (mensal ? '<td></td><td></td>' : '') + '<td></td>'}</tr>`;
       });
