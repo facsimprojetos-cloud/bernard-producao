@@ -1,7 +1,7 @@
 import { EMPRESA, DOMINIO_INTERNO, LOGIN_GOOGLE } from './config.js';
 import { db, ctx, tem } from './estado.js';
 // Versão publicada: muda a cada atualização para o navegador não usar telas antigas do cache
-const VERSAO = '202611211345'; // atualizar a cada publicação
+const VERSAO = '202611211400'; // atualizar a cada publicação
 import { h, toast, modal } from './util.js';
 
 // Chegou pelo link de "Esqueci minha senha" do e-mail?
@@ -12,6 +12,7 @@ let recuperandoSenha = /type=recovery/.test(location.hash);
 const ROTAS = [
   { grupo: 'Produção' },
   { hash: '#/apontamento', nome: 'Apontamento (bip)', ico: '📷', modulo: 'apontamento', perfil: 'producao' },
+  { hash: '#/historico', nome: 'Histórico de apontamentos', ico: '🗒️', modulo: 'historico', perfil: 'supervisor', menu: false, marca: '#/apontamento' },
   { hash: '#/corte', nome: 'Corte e etiquetas', ico: '✂️', modulo: 'corte' },
   { hash: '#/roteiro', nome: 'Tempo padrão por modelo', ico: '⏱️', modulo: 'roteiro' },
   { grupo: 'Gestão' },
@@ -33,7 +34,7 @@ function montarLayout() {
   let itens = '', grupo = null;
   for (const r of ROTAS) {
     if (r.grupo) { grupo = r.grupo; continue; }
-    if (!visiveis.includes(r)) continue;
+    if (!visiveis.includes(r) || r.menu === false) continue;
     if (grupo) { itens += `<div class="grupo">${h(grupo)}</div>`; grupo = null; }
     itens += `<a href="${r.hash}" data-hash="${r.hash}"><span class="ico">${r.ico}</span>${h(r.nome)}</a>`;
   }
@@ -76,7 +77,7 @@ async function navegar() {
   if (!visiveis.length) { el.innerHTML = '<div class="card">Seu perfil ainda não tem telas liberadas nesta versão.</div>'; return; }
   const hash = location.hash || visiveis[0].hash;
   const rota = ROTAS.find(r => r.hash && hash.startsWith(r.hash)) || visiveis[0];
-  document.querySelectorAll('.menu a').forEach(a => a.classList.toggle('ativo', a.dataset.hash === rota.hash));
+  document.querySelectorAll('.menu a').forEach(a => a.classList.toggle('ativo', a.dataset.hash === (rota.marca || rota.hash)));
   if (rota.perfil && !tem(rota.perfil)) { el.innerHTML = '<div class="card">Acesso restrito.</div>'; return; }
   const seq = ++navSeq;
   el.innerHTML = '<div class="vazio"><div class="spinner" style="margin:auto"></div></div>';

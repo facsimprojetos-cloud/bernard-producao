@@ -9,7 +9,8 @@ let cad = null, raiz = null, pararCam = null;
 export async function render(el) {
   raiz = el;
   cad = await cadastros(db);
-  el.innerHTML = `
+  const abas = tem('supervisor') ? `<div class="abas"><a class="aba-link ativo" href="#/apontamento">📷 Lançar apontamento</a><a class="aba-link" href="#/historico">🗒️ Histórico</a></div>` : '';
+  el.innerHTML = `${abas}
     <div class="cab"><div><h1>Apontamento</h1><p>Bipe o corte, escolha o processo e quem fez.</p></div></div>
     <div class="card bip">
       <form id="f-cod" class="linha-cod" autocomplete="off">
