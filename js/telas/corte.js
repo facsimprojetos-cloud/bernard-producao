@@ -1,9 +1,23 @@
 import { db, tem } from '../estado.js';
-import { h, num, data, chip, ler, toast, msgErro, confirmar, modal, opcoes, hojeISO, cadastros, ativos, porId } from '../util.js';
+import { h, num, data, chip, ler, toast, msgErro, confirmar, modal, opcoes, hojeISO, cadastros, ativos, porId, pedirTexto, limparCache } from '../util.js';
 import { abrirEtiquetas } from '../etiquetas.js';
 
 let cad = null;
 let busca = '';
+
+// Cor + tonalidade numa lista só ("PRETO 2"), como o pessoal já usa
+const chaveCor = (cor_id, ton) => `${cor_id ?? ''}|${ton ?? ''}`;
+async function carregarCoresCorte() {
+  const lista = await ler(db.from('v_cores_corte').select('*'));
+  return lista.sort((a, b) => {
+    const na = a.nome.replace(/\s*\d+$/, ''), nb = b.nome.replace(/\s*\d+$/, '');
+    return na.localeCompare(nb, 'pt-BR') || (a.tonalidade || 0) - (b.tonalidade || 0);
+  });
+}
+function opcoesCor(lista, chave) {
+  const vis = lista.filter(c => c.ativo !== false || c.chave === chave);
+  return `<option value="">Selecione…</option>` + vis.map(c => `<option value="${h(c.chave)}" ${c.chave === chave ? 'selected' : ''}>${h(c.nome)}</option>`).join('');
+}
 
 export async function render(el) {
   cad = await cadastros(db);
@@ -21,20 +35,19 @@ async function lista(el) {
   const cortes = await ler(q);
   const pode = tem('corte');
   el.innerHTML = `
-    <div class="cab"><div><h1>Corte e etiquetas</h1><p>Cada linha (cor + tonalidade + tamanho) vira um pacote com etiqueta própria. O QR leva só o código do pacote.</p></div>
+    <div class="cab"><div><h1>Corte e etiquetas</h1><p>Cada linha (cor + tamanho) vira uma folha de acompanhamento com QR, que segue com a caixa.</p></div>
       ${pode ? '<a class="btn pri" href="#/corte/novo">+ Novo corte</a>' : ''}</div>
     <form class="filtros" id="f-busca"><label class="campo" style="max-width:220px">Nº do corte<input id="busca" inputmode="numeric" value="${h(busca)}" placeholder="Ex.: 550"></label>
       <button class="btn">Buscar</button>${busca ? '<button class="btn" type="button" id="limpa">Ver últimos</button>' : ''}</form>
     <div class="tabela-wrap"><table>
-      <thead><tr><th>Corte</th><th>Risco</th><th>Data</th><th>Produto</th><th>Tecido</th><th>Destino</th><th class="n">Linhas</th><th class="n">Peças</th><th></th></tr></thead>
+      <thead><tr><th>Corte</th><th>Risco</th><th>Data</th><th>Produto</th><th>Tecido</th><th class="n">Linhas</th><th class="n">Peças</th><th></th></tr></thead>
       <tbody>${cortes.map(c => `<tr>
         <td class="forte">${h(c.numero)}${c.sequencia > 1 ? '/' + h(c.sequencia) : ''}${c.importado ? ' ' + chip('AppSheet') : ''}</td>
         <td>${h(c.tipo_risco || '')}</td><td>${data(c.data)}</td><td>${h(c.produto)}</td><td>${h(c.tecido || '')}</td>
-        <td>${c.destino === 'FACÇÃO' ? 'Facção ' + h(c.faccao || '') : 'Interno'}</td>
         <td class="n">${num(c.linhas)}</td><td class="n">${num(c.pecas)}</td>
         <td><div class="acoes" style="flex-wrap:nowrap"><a class="btn peq" href="#/corte/${c.id}">${pode ? 'Abrir' : 'Ver'}</a>
           <button class="btn peq pri" data-etq="${c.id}">Etiquetas</button></div></td></tr>`).join('')
-        || '<tr><td colspan="9" class="vazio">Nenhum corte encontrado.</td></tr>'}</tbody></table></div>`;
+        || '<tr><td colspan="8" class="vazio">Nenhum corte encontrado.</td></tr>'}</tbody></table></div>`;
   el.querySelector('#f-busca').onsubmit = (e) => { e.preventDefault(); busca = el.querySelector('#busca').value.trim(); lista(el); };
   el.querySelector('#limpa')?.addEventListener('click', () => { busca = ''; lista(el); });
   el.querySelectorAll('[data-etq]').forEach(b => b.onclick = () => abrirEtiquetas(b.dataset.etq));
@@ -55,11 +68,37 @@ async function editor(el, id) {
           tipo_risco_id: cad.tiposRisco[0]?.id, produto_id: cad.produtos.length === 1 ? cad.produtos[0].id : null };
   }
   const st = { c, linhas: (c.itens || []).map(i => ({ ...i, elasticos: (i.elasticos || []).map(Number) })), sujo: false };
-  const cores = porId(cad.cores), tams = porId(cad.tamanhos), elas = porId(cad.elasticos);
+  let coresCorte = await carregarCoresCorte();
+  let elas = porId(cad.elasticos);
   const tamsAtivos = cad.tamanhos;
   let gradeElas = [];
 
+  const nomeCor = (l) => coresCorte.find(x => x.chave === chaveCor(l.cor_id, l.tonalidade))?.nome || '';
   const nomeElas = (ids) => ids.map(i => elas[i]?.nome).filter(Boolean).join(' + ');
+  const chipsElas = (sel) => ativos(cad.elasticos, null).concat(cad.elasticos.filter(e => e.ativo === false && sel.has(e.id)))
+    .map(e => `<button type="button" data-e="${e.id}" class="${sel.has(e.id) ? 'on' : ''}">${h(e.nome)}</button>`).join('');
+
+  // + Adicionar cor / elástico (cadastra na hora e já seleciona)
+  const novaCor = async () => {
+    const nome = await pedirTexto('Adicionar cor', 'Digite a cor como vocês usam, com o número da tonalidade se tiver. Ex.: <b>PRETO 3</b>, <b>MARINHO</b>.',
+      { rotulo: 'Cor', minimo: 2, botao: 'Adicionar', classe: 'pri' });
+    if (!nome) return null;
+    const { data: r, error } = await db.rpc('adicionar_cor', { p_nome: nome });
+    if (error) { toast(msgErro(error), 'erro'); return null; }
+    limparCache(); cad = await cadastros(db, true); coresCorte = await carregarCoresCorte();
+    toast(`Cor ${r.nome} disponível na lista.`, 'ok');
+    return r.chave;
+  };
+  const novoElastico = async () => {
+    const nome = await pedirTexto('Adicionar elástico', 'Digite a marca do elástico. Ex.: <b>FERRANTELLI ITALY</b>.',
+      { rotulo: 'Elástico', minimo: 2, botao: 'Adicionar', classe: 'pri' });
+    if (!nome) return null;
+    const { data: r, error } = await db.rpc('adicionar_elastico', { p_nome: nome });
+    if (error) { toast(msgErro(error), 'erro'); return null; }
+    limparCache(); cad = await cadastros(db, true); elas = porId(cad.elasticos);
+    toast(`Elástico ${r.nome} disponível na lista.`, 'ok');
+    return Number(r.id);
+  };
   const totais = () => ({ linhas: st.linhas.length, pecas: st.linhas.reduce((s, l) => s + (Number(l.qtd) || 0), 0) });
 
   el.innerHTML = `
@@ -73,18 +112,17 @@ async function editor(el, id) {
       <label class="campo">Data<input type="date" name="data" value="${h(c.data || hojeISO())}"></label>
       <label class="campo">Produto<select name="produto_id" required>${opcoes(ativos(cad.produtos, c.produto_id), c.produto_id)}</select></label>
       <label class="campo">Tecido<select name="tecido_id" required>${opcoes(ativos(cad.tecidos, c.tecido_id), c.tecido_id)}</select></label>
-      <label class="campo">Destino<select name="destino"><option value="INTERNO">Interno</option><option value="FACÇÃO" ${c.destino === 'FACÇÃO' ? 'selected' : ''}>Facção</option></select></label>
-      <label class="campo" id="lb-fac">Facção<select name="faccao_id">${opcoes(ativos(cad.faccoes, c.faccao_id), c.faccao_id, 'nome', 'id', cad.faccoes.length ? 'Escolha…' : 'Nenhuma facção cadastrada')}</select></label>
       <label class="campo" style="grid-column:1/-1">Observação<input name="obs" value="${h(c.obs || '')}"></label>
     </form>
     ${pode ? `<div class="card">
       <h2>Adicionar em grade</h2>
       <div class="grade g4">
-        <label class="campo">Cor<select id="g-cor">${opcoes(ativos(cad.cores), null)}</select></label>
-        <label class="campo">Tonalidade<input id="g-ton" type="number" min="1" placeholder="(opcional)"></label>
+        <label class="campo" style="grid-column:span 2">Cor<select id="g-cor">${opcoesCor(coresCorte, null)}</select></label>
+        <div class="campo" style="align-self:end"><button type="button" class="btn" id="g-nova-cor">+ Adicionar cor</button></div>
       </div>
-      <div class="peq forte" style="margin:10px 0 4px">Elástico(s)</div>
-      <div class="elas" id="g-elas">${ativos(cad.elasticos).map(e => `<button type="button" data-e="${e.id}">${h(e.nome)}</button>`).join('')}</div>
+      <div style="display:flex;align-items:center;gap:8px;margin:10px 0 4px"><span class="peq forte">Elástico(s)</span>
+        <button type="button" class="btn peq" id="g-novo-elas">+ Adicionar elástico</button></div>
+      <div class="elas" id="g-elas">${chipsElas(new Set())}</div>
       <div class="peq forte" style="margin:10px 0 4px">Quantidade por tamanho</div>
       <div class="grade-tam">${tamsAtivos.map(t => `<div><label>${h(t.nome)}</label><input type="number" min="0" inputmode="numeric" data-gt="${t.id}"></div>`).join('')}</div>
       <div class="acoes" style="margin-top:10px"><button class="btn acento" type="button" id="g-add">Adicionar linhas</button></div>
@@ -92,7 +130,7 @@ async function editor(el, id) {
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><h2 style="margin:0">Linhas</h2>
         ${pode ? '<button class="btn peq" type="button" id="add1">+ Linha avulsa</button>' : ''}</div>
-      <div class="tabela-wrap" style="margin-top:8px"><table class="tab-linhas"><thead><tr><th>Cor</th><th>Ton.</th><th>Tamanho</th><th class="n">Qtd</th><th>Elástico(s)</th><th>Código</th><th></th></tr></thead>
+      <div class="tabela-wrap" style="margin-top:8px"><table class="tab-linhas"><thead><tr><th>Cor</th><th>Tamanho</th><th class="n">Qtd</th><th>Elástico(s)</th><th>Código</th><th></th></tr></thead>
       <tbody id="linhas"></tbody></table></div>
     </div>
     ${pode ? `<div class="total-barra"><div><span id="tot"></span></div>
@@ -100,8 +138,6 @@ async function editor(el, id) {
 
   const fCab = el.querySelector('#f-cab');
   if (!pode) fCab.querySelectorAll('input,select').forEach(i => { i.disabled = true; });
-  const ajustaFac = () => { el.querySelector('#lb-fac').style.display = fCab.destino.value === 'FACÇÃO' ? '' : 'none'; };
-  fCab.destino.onchange = ajustaFac; ajustaFac();
   fCab.addEventListener('input', () => { st.sujo = true; });
   el.querySelector('#etq')?.addEventListener('click', async () => {
     if (st.sujo && !await confirmar('Alterações não salvas', 'Há alterações não salvas. As etiquetas saem com os dados já gravados. Continuar?')) return;
@@ -114,22 +150,24 @@ async function editor(el, id) {
     tb.innerHTML = st.linhas.map((l, i) => {
       const trava = !pode;
       return `<tr data-i="${i}">
-        <td><select data-f="cor_id" ${trava ? 'disabled' : ''}>${opcoes(ativos(cad.cores, l.cor_id), l.cor_id)}</select></td>
-        <td><input class="ton" type="number" min="1" data-f="tonalidade" value="${h(l.tonalidade ?? '')}" ${trava ? 'disabled' : ''}></td>
+        <td><select data-f="cor" ${trava ? 'disabled' : ''}>${opcoesCor(coresCorte, chaveCor(l.cor_id, l.tonalidade))}</select></td>
         <td><select data-f="tamanho_id" ${trava ? 'disabled' : ''}>${opcoes(tamsAtivos, l.tamanho_id)}</select></td>
         <td class="n"><input class="qtd" type="number" min="1" inputmode="numeric" data-f="qtd" value="${h(l.qtd ?? '')}" ${trava ? 'disabled' : ''}></td>
         <td>${h(nomeElas(l.elasticos)) || '<span class="muted">—</span>'} ${pode ? `<button type="button" class="btn peq" data-elas="${i}">✎</button>` : ''}</td>
         <td>${l.codigo ? h(l.codigo) : '<span class="muted peq">novo</span>'}${l.apontamentos ? `<div class="peq muted">${num(l.apontamentos)} apont.</div>` : ''}</td>
         <td>${pode ? (l.apontamentos ? '<span class="peq muted" title="Linha com apontamentos não pode ser removida">🔒</span>'
           : `<button type="button" class="btn peq perigo" data-rm="${i}" title="Remover">×</button>`) : ''}</td></tr>`;
-    }).join('') || '<tr><td colspan="7" class="vazio">Nenhuma linha ainda. Use "Adicionar em grade".</td></tr>';
+    }).join('') || '<tr><td colspan="6" class="vazio">Nenhuma linha ainda. Use "Adicionar em grade".</td></tr>';
     const t = totais();
     const tot = el.querySelector('#tot'); if (tot) tot.innerHTML = `<b>${num(t.linhas)}</b> linha(s) · <b>${num(t.pecas)}</b> peça(s)`;
   };
   tb.addEventListener('change', (e) => {
     const tr = e.target.closest('tr[data-i]'), f = e.target.dataset.f; if (!tr || !f) return;
     const l = st.linhas[+tr.dataset.i];
-    l[f] = e.target.value === '' ? null : Number(e.target.value);
+    if (f === 'cor') {
+      const [cid, ton] = e.target.value.split('|');
+      l.cor_id = cid ? Number(cid) : null; l.tonalidade = ton ? Number(ton) : null;
+    } else l[f] = e.target.value === '' ? null : Number(e.target.value);
     st.sujo = true; desenhar();
   });
   tb.addEventListener('click', async (e) => {
@@ -140,14 +178,21 @@ async function editor(el, id) {
 
   const escolherElasticos = (i) => {
     const sel = new Set(st.linhas[i].elasticos);
+    const ligar = (m) => m.querySelectorAll('.elas [data-e]').forEach(b => b.onclick = () => {
+      const v = Number(b.dataset.e); sel.has(v) ? sel.delete(v) : sel.add(v); b.classList.toggle('on');
+    });
     modal({
       titulo: 'Elástico(s) da linha',
-      corpo: `<div class="elas">${ativos(cad.elasticos, null).concat(cad.elasticos.filter(e => e.ativo === false && sel.has(e.id)))
-        .map(e => `<button type="button" data-e="${e.id}" class="${sel.has(e.id) ? 'on' : ''}">${h(e.nome)}</button>`).join('')}</div>
-        <label style="display:block;margin-top:12px"><input type="checkbox" id="todas"> Aplicar a todas as linhas desta cor + tonalidade</label>`,
-      aoAbrir: (m) => m.querySelectorAll('[data-e]').forEach(b => b.onclick = () => {
-        const v = Number(b.dataset.e); sel.has(v) ? sel.delete(v) : sel.add(v); b.classList.toggle('on');
-      }),
+      corpo: `<div class="elas">${chipsElas(sel)}</div>
+        <button type="button" class="btn peq" id="m-novo-elas" style="margin-top:8px">+ Adicionar elástico</button>
+        <label style="display:block;margin-top:12px"><input type="checkbox" id="todas"> Aplicar a todas as linhas desta cor</label>`,
+      aoAbrir: (m) => {
+        ligar(m);
+        m.querySelector('#m-novo-elas').onclick = async () => {
+          const novo = await novoElastico(); if (!novo) return;
+          sel.add(novo); m.querySelector('.elas').innerHTML = chipsElas(sel); ligar(m);
+        };
+      },
       botoes: [{ texto: 'Cancelar' }, { texto: 'Aplicar', classe: 'pri', acao: (m) => {
         const lista = [...sel].sort((a, b) => a - b), l = st.linhas[i];
         const alvo = m.querySelector('#todas').checked ? st.linhas.filter(x => x.cor_id === l.cor_id && (x.tonalidade ?? null) === (l.tonalidade ?? null)) : [l];
@@ -158,14 +203,26 @@ async function editor(el, id) {
   };
 
   // grade
-  el.querySelectorAll('#g-elas [data-e]').forEach(b => b.onclick = () => {
+  const ligarGradeElas = () => el.querySelectorAll('#g-elas [data-e]').forEach(b => b.onclick = () => {
     const v = Number(b.dataset.e);
     gradeElas = gradeElas.includes(v) ? gradeElas.filter(x => x !== v) : [...gradeElas, v];
     b.classList.toggle('on');
   });
+  ligarGradeElas();
+  el.querySelector('#g-nova-cor')?.addEventListener('click', async () => {
+    const chave = await novaCor(); if (!chave) return;
+    el.querySelector('#g-cor').innerHTML = opcoesCor(coresCorte, chave);
+    desenhar();
+  });
+  el.querySelector('#g-novo-elas')?.addEventListener('click', async () => {
+    const novo = await novoElastico(); if (!novo) return;
+    if (!gradeElas.includes(novo)) gradeElas.push(novo);
+    el.querySelector('#g-elas').innerHTML = chipsElas(new Set(gradeElas));
+    ligarGradeElas(); desenhar();
+  });
   el.querySelector('#g-add')?.addEventListener('click', () => {
-    const cor = Number(el.querySelector('#g-cor').value) || null;
-    const ton = Number(el.querySelector('#g-ton').value) || null;
+    const [cid, tonTxt] = (el.querySelector('#g-cor').value || '|').split('|');
+    const cor = Number(cid) || null, ton = Number(tonTxt) || null;
     if (!cor) return toast('Escolha a cor.', 'erro');
     const novas = [];
     el.querySelectorAll('[data-gt]').forEach(i => { const q = Math.trunc(Number(i.value) || 0); if (q > 0) novas.push({ tamanho_id: Number(i.dataset.gt), qtd: q }); });
@@ -178,7 +235,7 @@ async function editor(el, id) {
     });
     el.querySelectorAll('[data-gt]').forEach(i => { i.value = ''; });
     st.sujo = true; desenhar();
-    toast(`${novas.length} linha(s) de ${cores[cor].nome}${ton ? ' ' + ton : ''}${somadas ? ` (${somadas} somada(s) a linhas existentes)` : ''}.`, 'ok');
+    toast(`${novas.length} linha(s) de ${nomeCor({ cor_id: cor, tonalidade: ton })}${somadas ? ` (${somadas} somada(s) a linhas existentes)` : ''}.`, 'ok');
   });
   el.querySelector('#add1')?.addEventListener('click', () => {
     const ult = st.linhas[st.linhas.length - 1];
@@ -191,7 +248,7 @@ async function editor(el, id) {
     const f = Object.fromEntries(new FormData(fCab));
     const ruim = st.linhas.findIndex(l => !l.cor_id || !l.tamanho_id || !(Number(l.qtd) > 0));
     if (ruim >= 0) return toast(`Linha ${ruim + 1}: preencha cor, tamanho e quantidade.`, 'erro');
-    const p = { ...f, id: id || null, itens: st.linhas.map(l => ({ id: l.id || null, cor_id: l.cor_id, tonalidade: l.tonalidade || null, tamanho_id: l.tamanho_id, qtd: Number(l.qtd), elasticos: l.elasticos })) };
+    const p = { ...f, destino: c.destino || 'INTERNO', faccao_id: c.faccao_id || null, id: id || null, itens: st.linhas.map(l => ({ id: l.id || null, cor_id: l.cor_id, tonalidade: l.tonalidade || null, tamanho_id: l.tamanho_id, qtd: Number(l.qtd), elasticos: l.elasticos })) };
     const sem = st.linhas.filter(l => !l.elasticos.length).length;
     if (sem && !await confirmar('Linhas sem elástico', `${sem} linha(s) estão sem elástico. Salvar assim mesmo?`, 'Salvar')) return;
     const bts = el.querySelectorAll('#salvar,#salvar-etq'); bts.forEach(b => { b.disabled = true; });

@@ -5,8 +5,8 @@ App web (HTML + JavaScript puro, sem build) publicado no GitHub Pages em **https
 Substitui o AppSheet "Coleta de Dados Bernard" (planilha "Processos e Tempos Bernard").
 
 ## Fluxo
-1. **Corte**: cabeçalho (número, tipo de risco, produto, tecido, destino/facção) + linhas de cor, tonalidade, tamanho, quantidade e elástico(s), sem limite de linhas. Cada linha vira um pacote com código único (`B000123`).
-2. **Etiquetas**: QR com **só o código** do pacote + nome do item, quantidade e elástico. Folha A4 (Pimaco/Avery) ou térmica.
+1. **Corte**: cabeçalho (número, sequência, tipo de risco, data, produto, tecido, observação) + linhas de cor, tamanho, quantidade e elástico(s), sem limite de linhas. A cor é escolhida já com a tonalidade (ex.: PRETO 2) e há botões **+ Adicionar cor** e **+ Adicionar elástico**. Cada linha vira um pacote com código único (`B000123`).
+2. **Folha de acompanhamento da caixa** (padrão): igual à FOLHA DE IMPRESSÃO do AppSheet, 6 por A4. QR com **só o código**, corte/tamanho/cor/qtd/elástico e a lista de processos do roteiro (Meio … Tag) com NOME e DATA para assinar. Também há etiquetas adesivas A4 e térmicas.
 3. **Apontamento (bip)**: funcionária → lê o QR (câmera ou leitor) → escolhe o processo do roteiro → confirma quantidade e **data de produção** → grava.
 4. **Fechamento** por `data_producao` (base da premiação).
 
