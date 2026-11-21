@@ -1,7 +1,7 @@
 import { EMPRESA, DOMINIO_INTERNO, LOGIN_GOOGLE } from './config.js';
 import { db, ctx, tem } from './estado.js';
 // Versão publicada: muda a cada atualização para o navegador não usar telas antigas do cache
-const VERSAO = '202611211200'; // atualizar a cada publicação
+const VERSAO = '202611211500'; // atualizar a cada publicação
 import { h, toast, modal } from './util.js';
 
 // Chegou pelo link de "Esqueci minha senha" do e-mail?
@@ -13,6 +13,8 @@ const ROTAS = [
   { grupo: 'Produção' },
   { hash: '#/apontamento', nome: 'Apontamento (bip)', ico: '📷', modulo: 'apontamento', perfil: 'producao' },
   { hash: '#/corte', nome: 'Corte e etiquetas', ico: '✂️', modulo: 'corte' },
+  { hash: '#/fechamento', nome: 'Fechamento por dia', ico: '📊', modulo: 'fechamento', perfil: 'fechamento' },
+  { hash: '#/roteiro', nome: 'Tempo padrão por modelo', ico: '⏱️', modulo: 'roteiro' },
   { grupo: 'Gestão' },
   { hash: '#/usuarios', nome: 'Usuários', ico: '👥', modulo: 'usuarios', perfil: 'admin' },
 ];
