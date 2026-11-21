@@ -38,10 +38,10 @@ const nomeCorte = (it) => `${it.numero}${it.sequencia > 1 ? '/' + it.sequencia :
 function folhaAcompanhamento(it, processos) {
   const lin = processos.length + 4;
   return `<div class="fa-card"><table class="fa">
-    <colgroup><col style="width:19mm"><col style="width:25mm"><col><col style="width:12mm"><col style="width:16mm"></colgroup>
+    <colgroup><col style="width:19mm"><col style="width:27mm"><col><col style="width:11mm"><col style="width:21mm"></colgroup>
     <tr><td class="fa-qr" rowspan="${lin}"><div class="fa-qr-img">${qrSvg(it.codigo)}</div><div class="fa-cod">${h(it.codigo)}</div></td>
       <th>CORTE</th><td class="v nome">${h(`${nomeCorte(it)}-${corDe(it)}-${it.tamanho}`)}</td><th>QTD:</th><td class="v">${num(it.qtd)}</td></tr>
-    <tr><th>TAM</th><td class="v">${h(it.tamanho)}</td><th>COR:</th><td class="v">${h(corDe(it))}</td></tr>
+    <tr><th>TAM</th><td class="v">${h(it.tamanho)}</td><th>COR:</th><td class="v nome">${h(corDe(it))}</td></tr>
     <tr><th>ELÁSTICO</th><td class="v" colspan="3">${h(it.elastico || '')}</td></tr>
     <tr class="fa-cab"><th>PROCESSO</th><th colspan="2">NOME</th><th>DATA</th></tr>
     ${processos.map(p => `<tr class="fa-p"><td class="pn">${h(String(p).toUpperCase())}</td><td colspan="2"></td><td></td></tr>`).join('')}
