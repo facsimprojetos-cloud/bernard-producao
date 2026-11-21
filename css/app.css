@@ -252,4 +252,9 @@ tfoot td{border-top:2px solid var(--borda,#ccc);font-weight:700}
 .roteiro-grupo{margin-bottom:18px}
 .roteiro-grupo h2{font-size:1.05rem;margin:0 0 6px}
 input.tempo-ed{width:90px;text-align:right}
-td.vazio{color:var(--alerta,#b45309);font-style:italic}
+span.vazio{padding:0;color:var(--alerta,#b45309);font-style:italic}
+.roteiro-cab{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+.roteiro-cab h2{margin:0}
+.roteiro-grupo.editando .tabela-wrap{outline:2px solid var(--acento,#b8913a);border-radius:10px}
+#hist{margin-top:10px}
+#hist summary{cursor:pointer}

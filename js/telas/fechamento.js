@@ -1,9 +1,9 @@
 import { db } from '../estado.js';
-import { h, num, ler, chip, hojeISO, data } from '../util.js';
+import { h, num, ler, chip, hojeISO, data, cadastros } from '../util.js';
 
 // Fechamento por dia (premiação): soma por operador(a) e processo no DIA DE PRODUÇÃO escolhido.
 // Fonte: view bernard.v_fechamento_diario (só quem tem o perfil "fechamento" enxerga as linhas).
-let diaAtual = null;
+let diaAtual = null, operador = '';
 
 const somaDias = (iso, n) => {
   const d = new Date(iso + 'T12:00:00');
@@ -12,6 +12,8 @@ const somaDias = (iso, n) => {
 };
 
 export async function render(el) {
+  const cad = await cadastros(db);
+  const nomes = [...new Set(cad.funcionarios.filter(f => f.ativo !== false).map(f => f.nome))].sort((a, b) => a.localeCompare(b));
   if (!diaAtual) {
     const ult = await ler(db.from('v_fechamento_diario').select('data').order('data', { ascending: false }).limit(1));
     diaAtual = ult[0]?.data || hojeISO();
@@ -23,7 +25,8 @@ export async function render(el) {
       <button class="btn" id="ant" title="Dia anterior">◀</button>
       <div class="campo"><label>Dia de produção</label><input type="date" id="dia" value="${h(diaAtual)}"></div>
       <button class="btn" id="prox" title="Próximo dia">▶</button>
-      <div class="campo"><label>Operador(a)</label><input id="busca" placeholder="Filtrar pelo nome"></div>
+      <div class="campo"><label>Operador(a)</label><select id="busca"><option value="">Todos</option>${nomes.map(n =>
+        `<option ${n === operador ? 'selected' : ''}>${h(n)}</option>`).join('')}</select></div>
     </div>
     <div id="res"><p class="muted">Carregando…</p></div>`;
 
@@ -32,7 +35,7 @@ export async function render(el) {
   inp.onchange = () => ir(inp.value);
   el.querySelector('#ant').onclick = () => ir(somaDias(diaAtual, -1));
   el.querySelector('#prox').onclick = () => ir(somaDias(diaAtual, 1));
-  el.querySelector('#busca').oninput = () => desenhar();
+  el.querySelector('#busca').onchange = (e) => { operador = e.target.value; desenhar(); };
 
   let linhas = [];
   async function carregar() {
@@ -43,11 +46,11 @@ export async function render(el) {
   }
 
   function desenhar() {
-    const filtro = el.querySelector('#busca').value.trim().toLowerCase();
-    const lista = linhas.filter(l => !filtro || String(l.funcionario || '').toLowerCase().includes(filtro));
+    const filtro = operador;
+    const lista = linhas.filter(l => !filtro || l.funcionario === filtro);
     const res = el.querySelector('#res');
     if (!lista.length) {
-      res.innerHTML = `<div class="card"><p>Nenhum apontamento em <b>${h(data(diaAtual))}</b>${filtro ? ' para esse nome' : ''}.</p></div>`;
+      res.innerHTML = `<div class="card"><p>Nenhum apontamento em <b>${h(data(diaAtual))}</b>${filtro ? ' para ' + h(filtro) : ''}.</p></div>`;
       return;
     }
     // agrupa por operador(a)

@@ -2,10 +2,9 @@ import { db, ctx, tem } from '../estado.js';
 import { h, num, chip, ler, toast, msgErro, confirmar, hojeISO, data, cadastros, ativos, porId, minutosApont, lerQrCamera, bipSom } from '../util.js';
 
 // Ordem da tela (igual ao AppSheet): Nº do corte (bip/câmera) → modelo, tecido, tamanho, cor e quantidade do pacote
-// → processo → operador(a) → observação → gravar. A data de produção vem com hoje e pode ser mudada.
-const st = { data: hojeISO(), consulta: null, proc: null, func: '', qtd: null, obs: '', ocupado: false };
+// → processo(s) (pode marcar vários) → operador(a) → observação → gravar. A data de produção vem com hoje e pode ser mudada.
+const st = { data: hojeISO(), consulta: null, procs: [], func: '', qtd: null, obs: '', ocupado: false };
 let cad = null, raiz = null, pararCam = null;
-const fmtSeg = (s) => s == null ? null : `${num(s, Number(s) % 1 ? 2 : 0)} s/peça`;
 
 export async function render(el) {
   raiz = el;
@@ -48,7 +47,7 @@ function marcarData() {
     ? `<div class="aviso-box">Lançando produção do dia <b>${h(data(st.data))}</b> (não é hoje).</div>` : '';
 }
 
-function limparItem() { st.consulta = null; st.proc = null; st.func = ''; st.qtd = null; st.obs = ''; renderItem(); }
+function limparItem() { st.consulta = null; st.procs = []; st.func = ''; st.qtd = null; st.obs = ''; renderItem(); }
 
 async function consultar(texto) {
   texto = String(texto || '').trim();
@@ -57,24 +56,24 @@ async function consultar(texto) {
   inp.value = '';
   const { data: r, error } = await db.rpc('consultar_item', { p_codigo: texto, p_funcionario: null });
   if (error) {
-    bipSom(false); st.consulta = null; st.proc = null;
+    bipSom(false); st.consulta = null; st.procs = [];
     raiz.querySelector('#item').innerHTML = `<div class="res-scan erro"><b>${h(texto)}</b><div>${h(msgErro(error))}</div></div>`;
     return inp.focus();
   }
   bipSom(true);
-  st.consulta = r; st.proc = null; st.func = ''; st.qtd = null; st.obs = '';
+  st.consulta = r; st.procs = []; st.func = ''; st.qtd = null; st.obs = '';
   renderItem();
 }
 
 // funcionárias ativas; quem sabe fazer o processo escolhido aparece primeiro
 function opcoesFuncionarias() {
   const funcs = ativos(cad.funcionarios, st.func);
-  const sabe = new Set(cad.funcProc.filter(fp => fp.processo_id === st.proc).map(fp => fp.funcionario_id));
-  const fazem = st.proc ? funcs.filter(f => sabe.has(f.id)) : [];
+  const sabe = new Set(cad.funcProc.filter(fp => st.procs.includes(fp.processo_id)).map(fp => fp.funcionario_id));
+  const fazem = st.procs.length ? funcs.filter(f => sabe.has(f.id)) : [];
   const outras = funcs.filter(f => !fazem.includes(f));
   const opt = (f) => `<option value="${f.id}" ${String(f.id) === String(st.func) ? 'selected' : ''}>${h(f.nome)}</option>`;
   return `<option value="">Quem fez?</option>` + (fazem.length
-    ? `<optgroup label="Fazem este processo">${fazem.map(opt).join('')}</optgroup><optgroup label="Outras">${outras.map(opt).join('')}</optgroup>`
+    ? `<optgroup label="${st.procs.length > 1 ? 'Fazem estes processos' : 'Fazem este processo'}">${fazem.map(opt).join('')}</optgroup><optgroup label="Outras">${outras.map(opt).join('')}</optgroup>`
     : outras.map(opt).join(''));
 }
 
@@ -85,9 +84,8 @@ function renderItem() {
   const it = r.item, procs = r.processos || [];
   const botao = (p) => {
     const feito = Number(p.apontado) || 0;
-    return `<button type="button" class="proc ${p.processo_id === st.proc ? 'sel' : ''}" data-p="${p.processo_id}">
-      <b>${h(p.processo)}</b>
-      <small>${p.tempo_padrao_seg == null ? '<span class="semtempo">sem tempo padrão</span>' : h(fmtSeg(p.tempo_padrao_seg))}</small>
+    return `<button type="button" class="proc ${st.procs.includes(p.processo_id) ? 'sel' : ''}" data-p="${p.processo_id}">
+      <b>${st.procs.includes(p.processo_id) ? '✓ ' : ''}${h(p.processo)}</b>
       ${feito ? `<small class="${feito >= it.qtd ? 'feito' : ''}">já apontado: ${num(feito)} de ${num(it.qtd)}</small>` : ''}
     </button>`;
   };
@@ -106,7 +104,7 @@ function renderItem() {
       </div>
       ${it.elastico ? `<div class="det">Elástico: ${h(it.elastico)}</div>` : ''}
       ${procs.length ? `
-        <div class="peq forte" style="margin-top:14px">Processo</div>
+        <div class="peq forte" style="margin-top:14px">Processo <span class="muted" style="font-weight:400">(pode marcar mais de um)</span></div>
         <div class="procs">${procs.map(botao).join('')}</div>
         <label class="campo" style="margin-top:12px">Operador(a)<select id="func">${opcoesFuncionarias()}</select></label>
         <label class="campo" style="margin-top:8px">Observação (opcional)<input id="obs" maxlength="200" value="${h(st.obs || '')}"></label>
@@ -118,9 +116,10 @@ function renderItem() {
       : '<div class="erro-box">Não há roteiro cadastrado para este produto + tecido. Cadastre o roteiro antes de apontar.</div>'}
     </div>`;
   box.querySelectorAll('[data-p]').forEach(b => b.onclick = () => {
-    st.proc = Number(b.dataset.p); st.qtd = box.querySelector('#qtd')?.value ?? st.qtd; st.obs = box.querySelector('#obs')?.value ?? st.obs;
+    const id = Number(b.dataset.p);
+    st.procs = st.procs.includes(id) ? st.procs.filter(x => x !== id) : [...st.procs, id];
+    st.qtd = box.querySelector('#qtd')?.value ?? st.qtd; st.obs = box.querySelector('#obs')?.value ?? st.obs;
     renderItem();
-    raiz.querySelector('#func')?.focus();
   });
   const sel = box.querySelector('#func'); if (sel) sel.onchange = () => { st.func = sel.value; mostrarAvisos(); };
   const qtd = box.querySelector('#qtd');
@@ -131,51 +130,63 @@ function renderItem() {
 
 function mostrarAvisos() {
   const box = raiz.querySelector('#avisos'); if (!box) return;
-  const it = st.consulta.item, p = (st.consulta.processos || []).find(x => x.processo_id === st.proc);
+  const it = st.consulta.item, sel = selecionados();
   const qtd = Number(raiz.querySelector('#qtd')?.value) || 0;
   const av = [];
-  if (!p) av.push('<div class="muted peq" style="margin-top:8px">Escolha o processo.</div>');
+  if (!sel.length) av.push('<div class="muted peq" style="margin-top:8px">Escolha o processo.</div>');
   else {
-    if (p.tempo_padrao_seg == null) av.push('<div class="aviso-box"><b>Este processo não tem tempo padrão</b>, o apontamento ficará com 0 minutos.</div>');
-    const feito = Number(p.apontado) || 0;
-    if (feito) av.push(`<div class="aviso-box">Este pacote já tem <b>${num(feito)}</b> peça(s) apontada(s) em ${h(p.processo)}. Ao gravar, será pedida confirmação.</div>`);
-    else if (qtd > it.qtd) av.push(`<div class="aviso-box">A quantidade (${num(qtd)}) é maior que a do pacote (${num(it.qtd)}).</div>`);
-    if (!st.func) av.push('<div class="muted peq" style="margin-top:8px">Escolha quem fez o processo.</div>');
+    const sem = sel.filter(p => p.tempo_padrao_seg == null);
+    if (sem.length) av.push(`<div class="aviso-box"><b>Sem tempo padrão:</b> ${h(sem.map(p => p.processo).join(', '))}. Ficará com 0 minutos.</div>`);
+    for (const p of sel) {
+      const feito = Number(p.apontado) || 0;
+      if (feito) av.push(`<div class="aviso-box">Este pacote já tem <b>${num(feito)}</b> peça(s) apontada(s) em ${h(p.processo)}. Ao gravar, será pedida confirmação.</div>`);
+    }
+    if (qtd > it.qtd) av.push(`<div class="aviso-box">A quantidade (${num(qtd)}) é maior que a do pacote (${num(it.qtd)}).</div>`);
+    if (sel.length > 1) av.push(`<div class="muted peq" style="margin-top:8px">Serão gravados ${sel.length} apontamentos (${h(sel.map(p => p.processo).join(' + '))}), cada um com a quantidade feita.</div>`);
+    if (!st.func) av.push('<div class="muted peq" style="margin-top:8px">Escolha quem fez.</div>');
   }
   box.innerHTML = av.join('');
 }
 
+const selecionados = () => (st.consulta?.processos || []).filter(p => st.procs.includes(p.processo_id));
+
 async function gravar() {
   if (st.ocupado) return;
-  const it = st.consulta?.item, p = (st.consulta?.processos || []).find(x => x.processo_id === st.proc);
+  const it = st.consulta?.item, sel = selecionados();
   const qtd = Math.trunc(Number(raiz.querySelector('#qtd').value) || 0);
-  if (!p) return toast('Escolha o processo.', 'erro');
+  if (!sel.length) return toast('Escolha o processo.', 'erro');
   if (!st.func) { raiz.querySelector('#func')?.focus(); return toast('Escolha o operador(a) que fez o processo.', 'erro'); }
   if (qtd <= 0) return toast('Informe a quantidade.', 'erro');
   const nomeFunc = cad.funcionarios.find(f => String(f.id) === String(st.func))?.nome || '';
-  if (p.tempo_padrao_seg == null && !await confirmar('Processo sem tempo padrão',
-    `<b>${h(p.processo)}</b> não tem tempo padrão para ${h(it.produto)} + ${h(it.tecido || '')}. O apontamento ficará com <b>0 minutos</b>. Gravar assim mesmo?`, 'Gravar com 0 minutos', 'perigo')) return;
-  const feito = Number(p.apontado) || 0;
-  if (!feito && qtd > it.qtd && !await confirmar('Quantidade acima do pacote',
+  const sem = sel.filter(p => p.tempo_padrao_seg == null);
+  if (sem.length && !await confirmar('Processo sem tempo padrão',
+    `<b>${h(sem.map(p => p.processo).join(', '))}</b> não tem tempo padrão para ${h(it.produto)} + ${h(it.tecido || '')}. Ficará com <b>0 minutos</b>. Gravar assim mesmo?`, 'Gravar com 0 minutos', 'perigo')) return;
+  if (qtd > it.qtd && !await confirmar('Quantidade acima do pacote',
     `O pacote tem ${num(it.qtd)} peça(s). Gravar ${num(qtd)}?`, 'Gravar', 'perigo')) return;
   st.ocupado = true;
   const btn = raiz.querySelector('#gravar'); if (btn) btn.disabled = true;
-  const params = {
-    p_codigo: it.codigo, p_processo: p.processo_id, p_funcionario: Number(st.func), p_qtd: qtd,
-    p_data_producao: st.data, p_obs: raiz.querySelector('#obs')?.value || null, p_confirmar_repetido: false };
-  let { data: r, error } = await db.rpc('registrar_apontamento', params);
-  // mesmo pacote já apontado neste processo (inclui histórico do AppSheet): só grava se confirmar
-  if (!error && r?.repetido) {
-    bipSom(false);
-    const ok = await confirmar('Pacote já apontado neste processo',
-      h(r.aviso).replace(/\n/g, '<br>'), 'Confirmar novo lançamento', 'perigo');
-    if (!ok) { st.ocupado = false; if (btn) btn.disabled = false; return; }
-    ({ data: r, error } = await db.rpc('registrar_apontamento', { ...params, p_confirmar_repetido: true }));
+  const obs = raiz.querySelector('#obs')?.value || null;
+  const ok = [], falhou = [];
+  for (const p of sel) {
+    const params = {
+      p_codigo: it.codigo, p_processo: p.processo_id, p_funcionario: Number(st.func), p_qtd: qtd,
+      p_data_producao: st.data, p_obs: obs, p_confirmar_repetido: false };
+    let { data: r, error } = await db.rpc('registrar_apontamento', params);
+    // mesmo pacote já apontado neste processo (inclui histórico do AppSheet): só grava se confirmar
+    if (!error && r?.repetido) {
+      bipSom(false);
+      const sim = await confirmar(`Pacote já apontado em ${h(p.processo)}`,
+        h(r.aviso).replace(/\n/g, '<br>'), 'Confirmar novo lançamento', 'perigo');
+      if (!sim) { falhou.push(`${p.processo} (cancelado)`); continue; }
+      ({ data: r, error } = await db.rpc('registrar_apontamento', { ...params, p_confirmar_repetido: true }));
+    }
+    if (error || !r?.gravado) falhou.push(`${p.processo}: ${error ? msgErro(error) : 'não gravado'}`);
+    else ok.push(`${p.processo} ${num(r.minutos)} min`);
   }
   st.ocupado = false;
-  if (error || !r?.gravado) { if (btn) btn.disabled = false; bipSom(false); return toast(error ? msgErro(error) : 'Apontamento não gravado.', 'erro'); }
+  if (!ok.length) { if (btn) btn.disabled = false; bipSom(false); return toast(falhou.join(' · ') || 'Apontamento não gravado.', 'erro'); }
   bipSom(true);
-  toast(`Gravado: ${p.processo} · ${nomeFunc} · ${num(qtd)} peça(s) · ${num(r.minutos)} min`, 'ok');
+  toast(`Gravado: ${nomeFunc} · ${num(qtd)} peça(s) · ${ok.join(' + ')}${falhou.length ? ' · Não gravado: ' + falhou.join(', ') : ''}`, falhou.length ? 'erro' : 'ok');
   limparItem();
   raiz.querySelector('#cod').focus();
   carregarDia();

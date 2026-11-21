@@ -1,6 +1,6 @@
 import { db, tem } from '../estado.js';
 import { h, num, data, chip, ler, toast, msgErro, confirmar, modal, opcoes, hojeISO, cadastros, ativos, porId, pedirTexto, limparCache } from '../util.js';
-import { abrirEtiquetas } from '../etiquetas.js?v=202611211500';
+import { abrirEtiquetas } from '../etiquetas.js?v=202611211730';
 
 let cad = null;
 let busca = '';
