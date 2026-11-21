@@ -1,7 +1,7 @@
 import { EMPRESA, DOMINIO_INTERNO, LOGIN_GOOGLE } from './config.js';
 import { db, ctx, tem } from './estado.js';
 // Versão publicada: muda a cada atualização para o navegador não usar telas antigas do cache
-const VERSAO = '202611211530'; // atualizar a cada publicação
+const VERSAO = '202611211550'; // atualizar a cada publicação
 import { h, toast, modal } from './util.js';
 
 // Chegou pelo link de "Esqueci minha senha" do e-mail?
@@ -13,14 +13,16 @@ const ROTAS = [
   { grupo: 'Produção' },
   { hash: '#/apontamento', nome: 'Apontamento (bip)', ico: '📷', modulo: 'apontamento', perfil: 'producao' },
   { hash: '#/historico', nome: 'Histórico de apontamentos', ico: '🗒️', modulo: 'historico', perfil: 'supervisor', menu: false, marca: '#/apontamento' },
-  { hash: '#/corte', nome: 'Corte e etiquetas', ico: '✂️', modulo: 'corte' },
-  { hash: '#/roteiro', nome: 'Tempo padrão por modelo', ico: '⏱️', modulo: 'roteiro' },
+  { hash: '#/corte', nome: 'Corte e etiquetas', ico: '✂️', modulo: 'corte', perfil: 'corte' },
+  { hash: '#/roteiro', nome: 'Tempo padrão por modelo', ico: '⏱️', modulo: 'roteiro', perfil: ['cadastros', 'cronoanalise'] },
   { grupo: 'Gestão' },
   { hash: '#/painel', nome: 'Painel', ico: '📈', modulo: 'painel', perfil: 'fechamento' },
   { hash: '#/cadastros', nome: 'Cadastros', ico: '🗂️', modulo: 'cadastros', perfil: 'admin' },
   { hash: '#/usuarios', nome: 'Usuários', ico: '👥', modulo: 'usuarios', perfil: 'admin' },
 ];
-const rotasVisiveis = () => ROTAS.filter(r => r.hash && (!r.perfil || tem(r.perfil)));
+// perfil: um nome ou uma lista (basta ter um deles; admin vê tudo)
+const podeVer = (r) => !r.perfil || [].concat(r.perfil).some(p => tem(p));
+const rotasVisiveis = () => ROTAS.filter(r => r.hash && podeVer(r));
 
 const cacheModulos = {};
 async function carregarModulo(nome) {
@@ -78,7 +80,7 @@ async function navegar() {
   const hash = location.hash || visiveis[0].hash;
   const rota = ROTAS.find(r => r.hash && hash.startsWith(r.hash)) || visiveis[0];
   document.querySelectorAll('.menu a').forEach(a => a.classList.toggle('ativo', a.dataset.hash === (rota.marca || rota.hash)));
-  if (rota.perfil && !tem(rota.perfil)) { el.innerHTML = '<div class="card">Acesso restrito.</div>'; return; }
+  if (!podeVer(rota)) { el.innerHTML = '<div class="card">Acesso restrito.</div>'; return; }
   const seq = ++navSeq;
   el.innerHTML = '<div class="vazio"><div class="spinner" style="margin:auto"></div></div>';
   try {
