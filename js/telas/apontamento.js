@@ -95,7 +95,7 @@ function renderItem() {
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">
         <div class="nome">Corte ${h(it.numero)}${it.sequencia > 1 ? '/' + h(it.sequencia) : ''}${it.tipo_risco ? ' · ' + h(it.tipo_risco) : ''}</div>${chip(it.codigo, 'info')}
       </div>
-      ${it.etiqueta_antiga ? '<div class="aviso-box">Etiqueta antiga do AppSheet. Funcionou, mas reimprima a etiqueta nova deste corte.</div>' : ''}
+      ${it.etiqueta_antiga ? '<div class="muted peq" style="margin-top:4px">Etiqueta antiga do AppSheet.</div>' : ''}
       <div class="nums">
         <div><small>Modelo</small><b>${h(it.produto)}</b></div>
         <div><small>Tecido</small><b>${h(it.tecido || '—')}</b></div>
