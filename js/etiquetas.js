@@ -81,8 +81,9 @@ export async function itensParaEtiqueta(corteId, ids = null) {
   let q = db.from('v_corte_itens').select('*').eq('corte_id', corteId);
   if (ids) q = q.in('id', ids);
   const lista = await ler(q);
-  return lista.sort((a, b) => String(a.cor).localeCompare(String(b.cor)) || (a.tonalidade || 0) - (b.tonalidade || 0)
-    || (ordemTam[a.tamanho] ?? 99) - (ordemTam[b.tamanho] ?? 99));
+  // Ordem das folhas: por tamanho (todos os P, depois M, G...); dentro do tamanho, por cor e tonalidade
+  return lista.sort((a, b) => (ordemTam[a.tamanho] ?? 99) - (ordemTam[b.tamanho] ?? 99)
+    || String(a.cor).localeCompare(String(b.cor), 'pt-BR') || (a.tonalidade || 0) - (b.tonalidade || 0));
 }
 
 // Processos da folha: roteiro do produto + tecido do corte, na ordem da sequência (Meio primeiro ... Tag)
